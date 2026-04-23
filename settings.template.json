@@ -1,0 +1,39 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.cl4ud3-cr4ck/hooks/session-start.sh",
+            "timeout": 10,
+            "statusMessage": "l04d1ng cr4ck scr33n..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.cl4ud3-cr4ck/hooks/stop.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.cl4ud3-cr4ck/hooks/pre-tool-use.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
