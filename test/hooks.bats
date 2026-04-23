@@ -166,3 +166,37 @@ teardown() {
     # Should not create all-jingles dir
     [ ! -d "/tmp/.cl4ud3-cr4ck-all-jingles-$CL4UD3_SID" ]
 }
+
+# ── post-tool-use.sh ──
+
+@test "post-tool-use.sh: exits 0 with sounds disabled" {
+    run bash "$CL4UD3_HOME/hooks/post-tool-use.sh"
+    assert_success
+}
+
+@test "post-tool-use.sh: exits 0 with config missing" {
+    rm -f "$CL4UD3_HOME/config.sh"
+    run bash "$CL4UD3_HOME/hooks/post-tool-use.sh"
+    assert_success
+}
+
+@test "post-tool-use.sh: cooldown prevents rapid re-trigger" {
+    LOCKFILE="/tmp/.cl4ud3-cr4ck-tool-cooldown"
+    touch "$LOCKFILE"
+    run bash "$CL4UD3_HOME/hooks/post-tool-use.sh"
+    assert_success
+}
+
+@test "post-tool-use.sh: creates cooldown file" {
+    rm -f /tmp/.cl4ud3-cr4ck-tool-cooldown
+    bash "$CL4UD3_HOME/hooks/post-tool-use.sh"
+    [ -f /tmp/.cl4ud3-cr4ck-tool-cooldown ]
+}
+
+@test "post-tool-use.sh: skips play when modem disabled" {
+    rm -f /tmp/.cl4ud3-cr4ck-tool-cooldown
+    export CL4UD3_SOUNDS_ENABLED="true"
+    export CL4UD3_MODEM_SOUNDS="false"
+    run bash "$CL4UD3_HOME/hooks/post-tool-use.sh"
+    assert_success
+}

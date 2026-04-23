@@ -204,10 +204,12 @@ Control sounds live from Claude Code:
 /cr4ck disable-glitch  # glitch sounds OFF
 /cr4ck enable-jingle   # startup jingle ON
 /cr4ck disable-jingle  # startup jingle OFF
-/cr4ck enable-art      # ASCII art ON
-/cr4ck disable-art     # ASCII art OFF
-/cr4ck enable-all      # all categories ON
-/cr4ck disable-all     # all categories OFF
+/cr4ck enable-art       # ASCII art ON
+/cr4ck disable-art      # ASCII art OFF
+/cr4ck enable-animation # scanline animation ON
+/cr4ck disable-animation # scanline animation OFF
+/cr4ck enable-all       # all categories ON
+/cr4ck disable-all      # all categories OFF
 ```
 
 Changes take effect next session (or next hook fire for modem/error/glitch).
@@ -345,6 +347,7 @@ Works from any project directory — cl4ud3-cr4ck installs globally to `~/.cl4ud
 | Mute just glitch blips | `/cr4ck disable-glitch` |
 | Mute just error sounds | `/cr4ck disable-error` |
 | Hide ASCII art | `/cr4ck disable-art` |
+| Disable scanline animation | `/cr4ck disable-animation` |
 | Mute ALL categories | `/cr4ck disable-all` |
 | Enable ALL categories | `/cr4ck enable-all` |
 | Check what's on/off | `/cr4ck status` |
