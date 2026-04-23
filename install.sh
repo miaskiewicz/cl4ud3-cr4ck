@@ -339,6 +339,17 @@ HOOKS_JSON=$(cat <<ENDJSON
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$INSTALL_DIR/hooks/post-tool-use.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [

@@ -145,13 +145,34 @@ play_random_from_dir() {
 
     cleanup_session_files
 
+    # Track last-played per directory to avoid repeats
+    local dir_hash last_file hist_file
+    dir_hash=$(echo "$dir" | md5sum 2>/dev/null | cut -c1-8 || echo "$dir" | md5 2>/dev/null | cut -c1-8 || echo "x")
+    hist_file="/tmp/.cl4ud3-cr4ck-lastplay-${dir_hash}"
+    last_file=""
+    [ -f "$hist_file" ] && last_file=$(cat "$hist_file" 2>/dev/null)
+
     # Prefer WAV files, fall back to MIDI
-    local file
-    file=$(find "$dir" -maxdepth 1 -type f \( -name '*.wav' -o -name '*.mp3' \) 2>/dev/null | sort -R | head -1)
-    if [ -z "$file" ]; then
-        file=$(find -L "$dir" -maxdepth 1 -type f -name '*.mid' 2>/dev/null | sort -R | head -1)
+    local file candidates
+    candidates=$(find "$dir" -maxdepth 1 -type f \( -name '*.wav' -o -name '*.mp3' \) 2>/dev/null)
+    if [ -z "$candidates" ]; then
+        candidates=$(find -L "$dir" -maxdepth 1 -type f -name '*.mid' 2>/dev/null)
     fi
-    [ -n "$file" ] && play_audio "$file"
+    [ -z "$candidates" ] && return 1
+
+    # Filter out last-played file if more than one candidate
+    local count
+    count=$(echo "$candidates" | wc -l | tr -d ' ')
+    if [ "$count" -gt 1 ] && [ -n "$last_file" ]; then
+        file=$(echo "$candidates" | grep -v "^${last_file}$" | sort -R | head -1)
+    else
+        file=$(echo "$candidates" | sort -R | head -1)
+    fi
+
+    if [ -n "$file" ]; then
+        echo "$file" > "$hist_file"
+        play_audio "$file"
+    fi
 }
 
 # Loop playback — plays random sounds from dir until killed

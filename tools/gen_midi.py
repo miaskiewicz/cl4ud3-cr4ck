@@ -1135,10 +1135,11 @@ def generate_modem_sounds():
     random.seed(99)  # Deterministic
 
     # Modem 1: Light — quick carrier chirp + short scramble (1s)
+    # Character: bright, high-pitched, clean digital handshake
     midi = MIDIFile(2, deinterleave=False)
     midi.addTempo(0, 0, 480)
-    midi.addProgramChange(0, 0, 0, 80)   # Square
-    midi.addProgramChange(1, 1, 0, 87)   # Calliope
+    midi.addProgramChange(0, 0, 0, 80)   # Square — carrier tone
+    midi.addProgramChange(1, 1, 0, 87)   # Calliope — data chirps
     midi.addNote(0, 0, 81, 0.0, 0.1, 70)
     midi.addNote(0, 0, 84, 0.08, 0.1, 70)
     t = 0.2
@@ -1151,20 +1152,21 @@ def generate_modem_sounds():
     print(f"  [+] dialup-01-light.mid")
 
     # Modem 2: Medium — answer tone + denser scramble (1.5s)
+    # Character: deeper, buzzy, dual-tone handshake (like V.34 negotiation)
     midi = MIDIFile(3, deinterleave=False)
     midi.addTempo(0, 0, 480)
-    midi.addProgramChange(0, 0, 0, 80)
-    midi.addProgramChange(1, 1, 0, 87)
-    midi.addProgramChange(2, 2, 0, 81)
+    midi.addProgramChange(0, 0, 0, 81)   # Saw — gritty answer tone
+    midi.addProgramChange(1, 1, 0, 85)   # Charang — metallic data
+    midi.addProgramChange(2, 2, 0, 78)   # Whistle — carrier sweep
     for i in range(2):
-        midi.addNote(0, 0, 72, i * 0.12, 0.06, 90)
-        midi.addNote(0, 0, 84, i * 0.12 + 0.05, 0.06, 90)
+        midi.addNote(0, 0, 60, i * 0.12, 0.06, 90)   # Lower answer tone
+        midi.addNote(0, 0, 72, i * 0.12 + 0.05, 0.06, 90)
     t = 0.3
     for _ in range(25):
         midi.addNote(1, 1, random.randint(60, 108), t, 0.02, random.randint(50, 90))
         midi.addNote(2, 2, random.randint(48, 84), t, 0.03, random.randint(40, 70))
         t += random.uniform(0.015, 0.035)
-    midi.addNote(0, 0, 84, t, 0.12, 45)
+    midi.addNote(0, 0, 72, t, 0.12, 45)
     with open(os.path.join(modem_dir, "dialup-02-medium.mid"), "wb") as f:
         midi.writeFile(f)
     print(f"  [+] dialup-02-medium.mid")
@@ -1192,10 +1194,11 @@ def generate_modem_sounds():
     print(f"  [+] dialup-03-heavy.mid")
 
     # Modem 4: Burst — short staccato data burst (1s)
+    # Character: machine-gun data packets, aggressive, percussive
     midi = MIDIFile(2, deinterleave=False)
     midi.addTempo(0, 0, 600)
-    midi.addProgramChange(0, 0, 0, 80)
-    midi.addProgramChange(1, 1, 0, 81)
+    midi.addProgramChange(0, 0, 0, 85)   # Charang — aggressive lead
+    midi.addProgramChange(1, 1, 0, 80)   # Square — sub pulse
     t = 0.0
     for _ in range(30):
         n = random.choice([72, 84, 96, 60, 90, 78, 66])
@@ -1207,10 +1210,11 @@ def generate_modem_sounds():
     print(f"  [+] dialup-04-chaos.mid")
 
     # Modem 5: Ping — two quick tones + minimal scramble (1s)
+    # Character: clean, bell-like, minimal — like ICMP ping
     midi = MIDIFile(2, deinterleave=False)
     midi.addTempo(0, 0, 480)
-    midi.addProgramChange(0, 0, 0, 80)
-    midi.addProgramChange(1, 1, 0, 87)
+    midi.addProgramChange(0, 0, 0, 11)   # Vibraphone — bell ping
+    midi.addProgramChange(1, 1, 0, 80)   # Square — digital tail
     midi.addNote(0, 0, 84, 0.0, 0.08, 80)
     midi.addNote(0, 0, 96, 0.06, 0.08, 80)
     t = 0.15
