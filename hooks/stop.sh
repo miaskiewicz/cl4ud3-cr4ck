@@ -37,6 +37,11 @@ if [ -f "$LOCKFILE" ]; then
     NOW=$(date +%s)
     DIFF=$((NOW - LAST))
     if [ "$DIFF" -lt 3 ]; then
+        # 🍄 acid bypasses sound cooldown
+        if [ -f "$CL4UD3_HOME/hooks/acid-mode.sh" ]; then
+            source "$CL4UD3_HOME/hooks/acid-mode.sh"
+            _is_acid_active && _acid_effect
+        fi
         exit 0
     fi
 fi
@@ -44,6 +49,12 @@ touch "$LOCKFILE"
 
 if [ "$CL4UD3_GLITCH_SOUNDS" != "false" ] && [ "$CL4UD3_SOUNDS_ENABLED" != "false" ]; then
     play_random_from_dir "$CL4UD3_HOME/sounds/glitches"
+fi
+
+# 🍄
+if [ -f "$CL4UD3_HOME/hooks/acid-mode.sh" ]; then
+    source "$CL4UD3_HOME/hooks/acid-mode.sh"
+    _is_acid_active && _acid_effect
 fi
 
 exit 0

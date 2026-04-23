@@ -59,23 +59,23 @@ teardown() {
     assert_success
 }
 
-@test "config.sh: fade disabled by default" {
-    run grep 'CL4UD3_ANIM_FADE.*:-false' "$CL4UD3_HOME/config.sh"
+@test "config.sh: fade enabled by default" {
+    run grep 'CL4UD3_ANIM_FADE.*:-true' "$CL4UD3_HOME/config.sh"
     assert_success
 }
 
-@test "config.sh: rainbow disabled by default" {
-    run grep 'CL4UD3_ANIM_RAINBOW.*:-false' "$CL4UD3_HOME/config.sh"
+@test "config.sh: rainbow enabled by default" {
+    run grep 'CL4UD3_ANIM_RAINBOW.*:-true' "$CL4UD3_HOME/config.sh"
     assert_success
 }
 
-@test "config.sh: matrix disabled by default" {
-    run grep 'CL4UD3_ANIM_MATRIX.*:-false' "$CL4UD3_HOME/config.sh"
+@test "config.sh: matrix enabled by default" {
+    run grep 'CL4UD3_ANIM_MATRIX.*:-true' "$CL4UD3_HOME/config.sh"
     assert_success
 }
 
-@test "config.sh: glitch disabled by default" {
-    run grep 'CL4UD3_ANIM_GLITCH.*:-false' "$CL4UD3_HOME/config.sh"
+@test "config.sh: glitch enabled by default" {
+    run grep 'CL4UD3_ANIM_GLITCH.*:-true' "$CL4UD3_HOME/config.sh"
     assert_success
 }
 

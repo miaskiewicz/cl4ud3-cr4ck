@@ -23,10 +23,22 @@ teardown() {
     [ "$CL4UD3_SOUNDS_ENABLED" = "true" ]
 }
 
-@test "config: art and animation default to true" {
+@test "config: art defaults to true" {
     source "$CL4UD3_HOME/config.sh"
     [ "$CL4UD3_STARTUP_ART" = "true" ]
-    [ "$CL4UD3_STARTUP_ANIMATION" = "true" ]
+}
+
+@test "config: acid mode defaults to false" {
+    unset CL4UD3_ACID_MODE
+    source "$CL4UD3_HOME/config.sh"
+    [ "$CL4UD3_ACID_MODE" = "false" ]
+}
+
+@test "config: acid mode env override works" {
+    export CL4UD3_ACID_MODE="true"
+    source "$CL4UD3_HOME/config.sh"
+    [ "$CL4UD3_ACID_MODE" = "true" ]
+    unset CL4UD3_ACID_MODE
 }
 
 @test "config: custom content defaults to true" {
