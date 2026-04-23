@@ -1,15 +1,8 @@
-<img width="378" height="218" alt="Screenshot 2026-04-23 at 19 09 13" src="https://github.com/user-attachments/assets/8b76724f-2c1f-4090-835f-12eaee90e7e5" />
-
 ```
   ╔══════════════════════════════════════════════════════════════════════╗
-  ║  ██████╗ ██╗     ██╗  ██╗██╗   ██╗██████╗ ██████╗                  ║
-  ║ ██╔════╝ ██║    ██╔╝  ██║██║   ██║██╔══██╗╚════██╗                 ║
-  ║ ██║      ██║   ██╔╝   ██║██║   ██║██║  ██║ █████╔╝                 ║
-  ║ ██║      ██║  ██╔╝    ██║██║   ██║██║  ██║ ╚═══██╗                 ║
-  ║ ╚██████╗ ██║ ██╔╝     ██║╚██████╔╝██████╔╝██████╔╝                 ║
-  ║  ╚═════╝ ╚═╝ ╚═╝      ╚═╝ ╚═════╝ ╚═════╝ ╚═════╝                 ║
-  ║                                                                      ║
-  ║        ─── c  r  4  c  k ───                                        ║
+  ║
+  ║           c  l  4   u  d 3
+  ║        ─── c  r  4  c  k ───                                         ║
   ║                                                                      ║
   ║  warez-inspired sound & art pack for Claude Code                     ║
   ║  est. 2026 · a gr0g joint                                            ║
@@ -19,6 +12,8 @@
 ## wH4t 1z th1s
 
 **cl4ud3-cr4ck** turns your Claude Code terminal into a 90s warez scene crack screen. Inspired by RAZOR 1911, FAIRLIGHT, ACiD/iCE ANSI art, keygen chiptunes, and the beautiful chaos of l33t cracker crews and BBS list servs.
+
+<img width="378" height="218" alt="Screenshot 2026-04-23 at 19 09 13" src="https://github.com/user-attachments/assets/8b76724f-2c1f-4090-835f-12eaee90e7e5" />
 
 **Features:**
 - 🖥 **17 ASCII art crack screens** — randomly displayed on startup (demoscene, cyberpunk, BBS, graffiti, animals)
