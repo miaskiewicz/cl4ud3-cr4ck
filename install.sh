@@ -283,7 +283,7 @@ fi
 echo "  [3/5] Generating MIDI sound effects..."
 
 if command -v pip3 >/dev/null 2>&1; then
-    pip3 install midiutil --quiet 2>/dev/null || pip3 install midiutil 2>/dev/null || true
+    pip3 install --user "midiutil>=1.2.1,<2" --quiet 2>/dev/null || pip3 install "midiutil>=1.2.1,<2" 2>/dev/null || true
 fi
 
 if python3 -c "import midiutil" 2>/dev/null; then

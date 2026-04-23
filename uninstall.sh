@@ -48,6 +48,9 @@ if [ -f "$CLAUDE_SETTINGS" ] && command -v jq >/dev/null 2>&1; then
     fi
 fi
 
+# Clean up temp files
+rm -rf /tmp/.cl4ud3-cr4ck-* /tmp/.cl4ud3-stop-debug.log
+
 echo ""
 echo "  cl4ud3-cr4ck removed. f4r3w3ll, h4ck3r."
 echo ""

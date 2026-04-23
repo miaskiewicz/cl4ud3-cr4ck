@@ -3,8 +3,11 @@
 # Displays random ASCII crack screen + plays startup jingle
 
 CL4UD3_HOME="${CL4UD3_HOME:-$HOME/.cl4ud3-cr4ck}"
-source "$CL4UD3_HOME/config.sh" 2>/dev/null
-source "$CL4UD3_HOME/hooks/play-midi.sh" 2>/dev/null
+if [ ! -f "$CL4UD3_HOME/config.sh" ]; then
+    exit 0
+fi
+source "$CL4UD3_HOME/config.sh"
+source "$CL4UD3_HOME/hooks/play-midi.sh"
 
 # ASCII art splash — writes directly to /dev/tty to bypass capture
 if [ "$CL4UD3_STARTUP_ART" != "false" ]; then
@@ -14,8 +17,8 @@ fi
 # Startup jingle — uses configured jingle directory
 JINGLE_DIR="${CL4UD3_JINGLE_DIR:-all}"
 if [ "$JINGLE_DIR" = "all" ]; then
-    # Combine both dirs into temp dir for random pick
-    _ALL_DIR="/tmp/.cl4ud3-cr4ck-all-jingles"
+    # Session-scoped temp dir for combined jingle symlinks
+    _ALL_DIR="/tmp/.cl4ud3-cr4ck-all-jingles-$CL4UD3_SID"
     mkdir -p "$_ALL_DIR"
     rm -f "$_ALL_DIR"/*.mid "$_ALL_DIR"/*.wav 2>/dev/null
     # Symlink files individually to avoid broken glob symlinks
@@ -47,8 +50,11 @@ if [ "$CL4UD3_STARTUP_JINGLE" != "false" ] && [ "$CL4UD3_SOUNDS_ENABLED" != "fal
                 source "$CL4UD3_HOME/hooks/play-midi.sh" 2>/dev/null
                 kill_music_loop
             ) &
-            echo $! > "$_PF_TIMER"
-            disown 2>/dev/null
+            local_timer_pid=$!
+            if [ -n "$local_timer_pid" ]; then
+                echo "$local_timer_pid" > "$_PF_TIMER"
+                disown "$local_timer_pid" 2>/dev/null
+            fi
         fi
     fi
 fi

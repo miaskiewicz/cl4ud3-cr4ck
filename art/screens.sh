@@ -361,7 +361,7 @@ SCREENS+=("""
 NUM_SCREENS=${#SCREENS[@]}
 # Load custom art from ~/.cl4ud3-cr4ck/art/custom/*.txt
 CL4UD3_HOME="${CL4UD3_HOME:-$HOME/.cl4ud3-cr4ck}"
-source "$CL4UD3_HOME/config.sh" 2>/dev/null
+[ -f "$CL4UD3_HOME/config.sh" ] && source "$CL4UD3_HOME/config.sh"
 if [ "$CL4UD3_CUSTOM_ART" != "false" ] && [ -d "$CL4UD3_HOME/art/custom" ]; then
     for artfile in "$CL4UD3_HOME/art/custom"/*.txt; do
         [ -f "$artfile" ] && SCREENS+=("$(cat "$artfile")")
