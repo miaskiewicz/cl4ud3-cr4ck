@@ -17,6 +17,7 @@
 
 **Features:**
 - 🖥 **17 ASCII art crack screens** — randomly displayed on startup (demoscene, cyberpunk, BBS, graffiti, animals)
+- 🎬 **5 animation styles** — scanline, fade, rainbow, matrix rain, glitch (randomly chosen per session)
 - 🎵 **5 warez intro loops** — short glitchy SID-style cracktro stabs (5-8s each)
 - 🎵 **11 classic jingles** — SID/chiptune tracks (tracker, jungle, gabber x2, beltram, detroit techno, demoscene x2)
 - 🎮 **Glitch sounds** — video game blips when Claude finishes (coin, powerup, warp, chirp, blip)
@@ -112,6 +113,14 @@ export CL4UD3_GLITCH_SOUNDS=false    # no completion blips
 export CL4UD3_ERROR_SOUNDS=false     # no error sounds
 export CL4UD3_MODEM_SOUNDS=false     # no dial-up on tool use
 
+# Animation styles — enable/disable individually
+# If multiple enabled, one is randomly chosen each session
+export CL4UD3_ANIM_SCANLINE=true   # line-by-line CRT reveal (default ON)
+export CL4UD3_ANIM_FADE=false      # dark→bright color fade-in
+export CL4UD3_ANIM_RAINBOW=false   # color cycle shift
+export CL4UD3_ANIM_MATRIX=false    # matrix rain then reveal
+export CL4UD3_ANIM_GLITCH=false    # scrambled→clean reveal
+
 # Jingle directory — which set of startup sounds to use
 #   "all"            — cycle through warez + classic combined (default)
 #   "startup-warez"  — short glitchy warez cracktro loops only
@@ -206,13 +215,46 @@ Control sounds live from Claude Code:
 /cr4ck disable-jingle  # startup jingle OFF
 /cr4ck enable-art       # ASCII art ON
 /cr4ck disable-art      # ASCII art OFF
-/cr4ck enable-animation # scanline animation ON
-/cr4ck disable-animation # scanline animation OFF
+/cr4ck enable-anim-scanline  # scanline animation ON
+/cr4ck disable-anim-scanline # scanline animation OFF
+/cr4ck enable-anim-fade     # fade animation ON
+/cr4ck disable-anim-fade    # fade animation OFF
+/cr4ck enable-anim-rainbow  # rainbow animation ON
+/cr4ck disable-anim-rainbow # rainbow animation OFF
+/cr4ck enable-anim-matrix   # matrix animation ON
+/cr4ck disable-anim-matrix  # matrix animation OFF
+/cr4ck enable-anim-glitch   # glitch animation ON
+/cr4ck disable-anim-glitch  # glitch animation OFF
 /cr4ck enable-all       # all categories ON
 /cr4ck disable-all      # all categories OFF
 ```
 
 Changes take effect next session (or next hook fire for modem/error/glitch).
+
+## 4n1m4t10n styl3z
+
+Five animation styles for ASCII art reveal. Enable any combination — one is randomly chosen each session.
+
+| Style | Description | Duration |
+|-------|-------------|----------|
+| **Scanline** | Line-by-line CRT reveal | ~0.6s |
+| **Fade** | Dark→bright color fade-in (4 passes) | ~1.5s |
+| **Rainbow** | Color cycle shift through rainbow palette | ~2s |
+| **Matrix** | Random green chars rain, then reveal | ~2.5s |
+| **Glitch** | Scrambled text progressively cleans up | ~1.5s |
+
+Scanline is enabled by default. Enable others via config or `/cr4ck`:
+
+```bash
+# Enable all animation styles
+export CL4UD3_ANIM_SCANLINE=true
+export CL4UD3_ANIM_FADE=true
+export CL4UD3_ANIM_RAINBOW=true
+export CL4UD3_ANIM_MATRIX=true
+export CL4UD3_ANIM_GLITCH=true
+```
+
+Backward compat: setting `CL4UD3_STARTUP_ANIMATION=false` disables all animation styles.
 
 ## cust0m1z4t10n
 
@@ -347,7 +389,11 @@ Works from any project directory — cl4ud3-cr4ck installs globally to `~/.cl4ud
 | Mute just glitch blips | `/cr4ck disable-glitch` |
 | Mute just error sounds | `/cr4ck disable-error` |
 | Hide ASCII art | `/cr4ck disable-art` |
-| Disable scanline animation | `/cr4ck disable-animation` |
+| Disable scanline animation | `/cr4ck disable-anim-scanline` |
+| Disable fade animation | `/cr4ck disable-anim-fade` |
+| Disable rainbow animation | `/cr4ck disable-anim-rainbow` |
+| Disable matrix animation | `/cr4ck disable-anim-matrix` |
+| Disable glitch animation | `/cr4ck disable-anim-glitch` |
 | Mute ALL categories | `/cr4ck disable-all` |
 | Enable ALL categories | `/cr4ck enable-all` |
 | Check what's on/off | `/cr4ck status` |

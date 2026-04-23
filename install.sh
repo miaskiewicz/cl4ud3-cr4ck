@@ -312,7 +312,7 @@ HOOKS_JSON=$(cat <<ENDJSON
           {
             "type": "command",
             "command": "$INSTALL_DIR/hooks/session-start.sh",
-            "timeout": 10
+            "timeout": 15
           }
         ]
       }

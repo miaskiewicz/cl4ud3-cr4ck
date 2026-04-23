@@ -721,15 +721,168 @@ RANDOM_INDEX=$((RANDOM % NUM_SCREENS))
 # Then output matching newlines to stderr so Claude Code advances its cursor
 ART="${SCREENS[$RANDOM_INDEX]}"
 LINE_COUNT=$(echo -e "$ART" | wc -l)
+# ============================================================================
+# Animation functions
+# ============================================================================
+
+# Scanline: line-by-line CRT reveal (~0.6s total)
+_anim_scanline() {
+    echo -e "$ART" | while IFS= read -r line; do
+        printf '%s\n' "$line" > /dev/tty
+        sleep 0.03
+    done
+}
+
+# Fade: dark→bright color fade-in (~1.5s total)
+_anim_fade() {
+    local fade_colors=(232 240 245)
+    local rendered
+    rendered="$(echo -e "$ART")"
+    for clr in "${fade_colors[@]}"; do
+        # Replace all 38;5;NNNm color codes with fade color
+        local faded
+        faded="$(echo "$rendered" | sed "s/38;5;[0-9]*m/38;5;${clr}m/g")"
+        # Move cursor up to overwrite previous frame (except first)
+        if [ "$clr" -ne 232 ]; then
+            printf '\033[%dA' "$LINE_COUNT" > /dev/tty
+        fi
+        printf '%s\n' "$faded" > /dev/tty
+        sleep 0.3
+    done
+    # Final frame: original colors
+    printf '\033[%dA' "$LINE_COUNT" > /dev/tty
+    printf '%s\n' "$rendered" > /dev/tty
+}
+
+# Rainbow: color cycle shift through palette (~2s total)
+_anim_rainbow() {
+    local rainbow=(196 208 214 226 46 51 45 39)
+    local rendered
+    rendered="$(echo -e "$ART")"
+    local num_frames=6
+    for ((frame=0; frame<num_frames; frame++)); do
+        local offset=$((frame % ${#rainbow[@]}))
+        local clr="${rainbow[$offset]}"
+        local shifted
+        shifted="$(echo "$rendered" | sed "s/38;5;[0-9]*m/38;5;${clr}m/g")"
+        if [ "$frame" -gt 0 ]; then
+            printf '\033[%dA' "$LINE_COUNT" > /dev/tty
+        fi
+        printf '%s\n' "$shifted" > /dev/tty
+        sleep 0.25
+    done
+    # Final frame: original colors
+    printf '\033[%dA' "$LINE_COUNT" > /dev/tty
+    printf '%s\n' "$rendered" > /dev/tty
+}
+
+# Matrix: green random chars rain then reveal (~2.5s total)
+_anim_matrix() {
+    local rendered
+    rendered="$(echo -e "$ART")"
+    local chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%^&*'
+    local num_frames=8
+    for ((frame=0; frame<num_frames; frame++)); do
+        if [ "$frame" -gt 0 ]; then
+            printf '\033[%dA' "$LINE_COUNT" > /dev/tty
+        fi
+        # Generate random green text matching art dimensions
+        echo "$rendered" | while IFS= read -r line; do
+            local stripped
+            stripped="$(echo "$line" | sed 's/\x1b\[[0-9;]*m//g')"
+            local len=${#stripped}
+            local out=""
+            for ((i=0; i<len; i++)); do
+                local ch="${stripped:$i:1}"
+                if [ "$ch" = " " ] && [ $((RANDOM % 3)) -ne 0 ]; then
+                    out+=" "
+                else
+                    local ri=$((RANDOM % ${#chars}))
+                    local shade=$((28 + RANDOM % 4))  # 28-31 = green shades
+                    out+="\033[38;5;${shade}m${chars:$ri:1}"
+                fi
+            done
+            printf '%b\033[0m\n' "$out" > /dev/tty
+        done
+        sleep 0.18
+    done
+    # Final frame: actual art
+    printf '\033[%dA' "$LINE_COUNT" > /dev/tty
+    printf '%s\n' "$rendered" > /dev/tty
+}
+
+# Glitch: scrambled→clean progressive reveal (~1.5s total)
+_anim_glitch() {
+    local rendered
+    rendered="$(echo -e "$ART")"
+    local glitch_chars='!@#$%^&*<>{}[]|/\~`'
+    local corruption_pcts=(80 50 25 8)
+    for pct in "${corruption_pcts[@]}"; do
+        if [ "$pct" -ne 80 ]; then
+            printf '\033[%dA' "$LINE_COUNT" > /dev/tty
+        fi
+        echo "$rendered" | while IFS= read -r line; do
+            local out=""
+            local i=0
+            local in_escape=0
+            while [ $i -lt ${#line} ]; do
+                local ch="${line:$i:1}"
+                if [ "$ch" = $'\033' ]; then
+                    in_escape=1
+                    out+="$ch"
+                elif [ $in_escape -eq 1 ]; then
+                    out+="$ch"
+                    [[ "$ch" =~ [a-zA-Z] ]] && in_escape=0
+                elif [ "$ch" != " " ] && [ $((RANDOM % 100)) -lt "$pct" ]; then
+                    local ri=$((RANDOM % ${#glitch_chars}))
+                    out+="${glitch_chars:$ri:1}"
+                else
+                    out+="$ch"
+                fi
+                ((i++))
+            done
+            printf '%s\n' "$out" > /dev/tty
+        done
+        sleep 0.3
+    done
+    # Final clean frame
+    printf '\033[%dA' "$LINE_COUNT" > /dev/tty
+    printf '%s\n' "$rendered" > /dev/tty
+}
+
+# ============================================================================
+# Animation selection and display
+# ============================================================================
+
+# Backward compat: CL4UD3_STARTUP_ANIMATION=false skips all animations
+_SKIP_ALL_ANIMS="false"
+if [ "$CL4UD3_STARTUP_ANIMATION" = "false" ]; then
+    _SKIP_ALL_ANIMS="true"
+fi
+
+# Build list of enabled animations
+_ANIMS=()
+if [ "$_SKIP_ALL_ANIMS" != "true" ]; then
+    [ "$CL4UD3_ANIM_SCANLINE" != "false" ] && _ANIMS+=(scanline)
+    [ "$CL4UD3_ANIM_FADE" != "false" ] && _ANIMS+=(fade)
+    [ "$CL4UD3_ANIM_RAINBOW" != "false" ] && _ANIMS+=(rainbow)
+    [ "$CL4UD3_ANIM_MATRIX" != "false" ] && _ANIMS+=(matrix)
+    [ "$CL4UD3_ANIM_GLITCH" != "false" ] && _ANIMS+=(glitch)
+fi
+
 if [ -w /dev/tty ]; then
     printf '\n' > /dev/tty
-    if [ "$CL4UD3_STARTUP_ANIMATION" != "false" ]; then
-        # Scanline reveal — line-by-line with CRT delay (~0.6s total)
-        echo -e "$ART" | while IFS= read -r line; do
-            printf '%s\n' "$line" > /dev/tty
-            sleep 0.03
-        done
+    if [ ${#_ANIMS[@]} -gt 0 ]; then
+        _ANIM="${_ANIMS[$((RANDOM % ${#_ANIMS[@]}))]}"
+        case "$_ANIM" in
+            scanline) _anim_scanline ;;
+            fade)     _anim_fade ;;
+            rainbow)  _anim_rainbow ;;
+            matrix)   _anim_matrix ;;
+            glitch)   _anim_glitch ;;
+        esac
     else
+        # No animations enabled — instant display
         echo -e "$ART" > /dev/tty
     fi
     printf '\n' > /dev/tty

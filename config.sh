@@ -37,9 +37,14 @@ CL4UD3_JINGLE_DURATION="${CL4UD3_JINGLE_DURATION:-25}"
 CL4UD3_CUSTOM_JINGLES="${CL4UD3_CUSTOM_JINGLES:-true}"
 CL4UD3_CUSTOM_ART="${CL4UD3_CUSTOM_ART:-true}"
 
-# Animate ASCII art screens (scanline reveal effect)
-# Set to "false" for instant display
-CL4UD3_STARTUP_ANIMATION="${CL4UD3_STARTUP_ANIMATION:-true}"
+# Animation styles — enable/disable individually
+# If multiple enabled, one is randomly chosen each session
+# Backward compat: CL4UD3_STARTUP_ANIMATION=false skips all animations
+CL4UD3_ANIM_SCANLINE="${CL4UD3_ANIM_SCANLINE:-true}"    # line-by-line CRT reveal
+CL4UD3_ANIM_FADE="${CL4UD3_ANIM_FADE:-false}"            # dark→bright color fade-in
+CL4UD3_ANIM_RAINBOW="${CL4UD3_ANIM_RAINBOW:-false}"      # color cycle shift
+CL4UD3_ANIM_MATRIX="${CL4UD3_ANIM_MATRIX:-false}"        # matrix rain then reveal
+CL4UD3_ANIM_GLITCH="${CL4UD3_ANIM_GLITCH:-false}"        # scrambled→clean reveal
 
 # Master kill switch — overrides everything above
 CL4UD3_SOUNDS_ENABLED="${CL4UD3_SOUNDS_ENABLED:-true}"
