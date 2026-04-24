@@ -1,19 +1,17 @@
 ```
-  ╔══════════════════════════════════════════════════════════════════════╗
-  ║                                                                      ║
-  ║           c  l  4   u  d 3                                           ║
-  ║        ─── c  r  4  c  k ───                                         ║
-  ║                                                                      ║
-  ║  warez-inspired sound & art pack for Claude Code                     ║
-  ║  est. 2026 · a gr0g joint                                            ║
-  ╚══════════════════════════════════════════════════════════════════════╝
+  ╔═══════════════════════════════════════════════════════════════╗
+  ║                                                               ║
+  ║                      c  l  4   u  d 3                         ║
+  ║                   ─── c  r  4  c  k ───                       ║
+  ║                                                               ║
+  ║        warez-inspired sound & art pack for Claude Code        ║
+  ║                  est. 2026 · a gr0g joint                     ║
+  ╚═══════════════════════════════════════════════════════════════╝
 ```
 
 ## wH4t 1z th1s
 
 **cl4ud3-cr4ck** turns your Claude Code terminal into a 90s warez scene crack screen. Inspired by RAZOR 1911, FAIRLIGHT, ACiD/iCE ANSI art, keygen chiptunes, and the beautiful chaos of l33t cracker crews and BBS list servs.
-
-<img width="378" height="218" alt="Screenshot 2026-04-23 at 19 09 13" src="https://github.com/user-attachments/assets/8b76724f-2c1f-4090-835f-12eaee90e7e5" />
 
 **Features:**
 - 🖥 **39 ASCII art crack screens** — randomly displayed on startup (demoscene, cyberpunk, BBS, graffiti, rave, animals, multilingual, psychedelic)
@@ -29,6 +27,10 @@
 - ⏱ **Auto-kill timer** — intro music stops after configurable max play time (default 60s)
 
 All sounds generated programmatically — MIDI via `midiutil`, raw WAV via Python stdlib. No sample packs, no downloads, pure math.
+
+<img width="378" height="218" alt="Screenshot 2026-04-23 at 19 09 13" src="https://github.com/user-attachments/assets/8b76724f-2c1f-4090-835f-12eaee90e7e5" />
+<img width="470" height="244" alt="Screenshot 2026-04-23 at 20 51 06" src="https://github.com/user-attachments/assets/fe78da3a-f108-43bc-9f47-77a51c6f1cbe" />
+
 
 ## 1nst4ll
 
@@ -466,3 +468,5 @@ In memory of the BBSes, the 14.4k modems, the NFO files, and everyone who ever t
 ## l1c3ns3
 
 MIT. Do whatever. Spread the warez.
+
+<img width="1006" height="620" alt="image" src="https://github.com/user-attachments/assets/aa321ad5-84d9-4c0c-85bd-b5f641a276d7" />
