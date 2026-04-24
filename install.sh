@@ -150,6 +150,7 @@ cp "$REPO_DIR/art/screens.sh" "$INSTALL_DIR/art/"
 cp "$REPO_DIR/hooks/"*.sh "$INSTALL_DIR/hooks/"
 cp "$REPO_DIR/tools/gen_midi.py" "$INSTALL_DIR/tools/"
 cp "$REPO_DIR/tools/gen_wav.py" "$INSTALL_DIR/tools/" 2>/dev/null || true
+cp "$REPO_DIR/tools/acid-303.py" "$INSTALL_DIR/tools/" 2>/dev/null || true
 
 # Copy pre-built WAV sounds from repo (overwrite old versions)
 for subdir in modem glitches error; do

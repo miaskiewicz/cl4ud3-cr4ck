@@ -22,7 +22,11 @@ if [ -f "$LOCKFILE" ]; then
         # 🍄 acid bypasses sound cooldown
         if [ -f "$CL4UD3_HOME/hooks/acid-mode.sh" ]; then
             source "$CL4UD3_HOME/hooks/acid-mode.sh"
-            _is_acid_active && _acid_effect
+            if _is_acid_active; then
+                _acid_effect
+                _acid_start_loop
+                _acid_maybe_stab
+            fi
         fi
         exit 0
     fi
@@ -36,7 +40,11 @@ fi
 # 🍄
 if [ -f "$CL4UD3_HOME/hooks/acid-mode.sh" ]; then
     source "$CL4UD3_HOME/hooks/acid-mode.sh"
-    _is_acid_active && _acid_effect
+    if _is_acid_active; then
+        _acid_effect
+        _acid_start_loop
+        _acid_maybe_stab
+    fi
 fi
 
 exit 0

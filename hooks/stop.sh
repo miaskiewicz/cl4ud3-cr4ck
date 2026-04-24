@@ -13,6 +13,9 @@ source "$CL4UD3_HOME/hooks/play-midi.sh"
 # Kill startup music loop if still playing
 kill_music_loop
 
+# Kill acid loop if running
+kill_acid_loop 2>/dev/null || true
+
 # Kill any modem sound still playing
 kill_active_sounds
 
@@ -40,7 +43,10 @@ if [ -f "$LOCKFILE" ]; then
         # 🍄 acid bypasses sound cooldown
         if [ -f "$CL4UD3_HOME/hooks/acid-mode.sh" ]; then
             source "$CL4UD3_HOME/hooks/acid-mode.sh"
-            _is_acid_active && _acid_effect
+            if _is_acid_active; then
+                _acid_effect
+                _acid_random_stab
+            fi
         fi
         exit 0
     fi
@@ -54,7 +60,10 @@ fi
 # 🍄
 if [ -f "$CL4UD3_HOME/hooks/acid-mode.sh" ]; then
     source "$CL4UD3_HOME/hooks/acid-mode.sh"
-    _is_acid_active && _acid_effect
+    if _is_acid_active; then
+        _acid_effect
+        _acid_random_stab
+    fi
 fi
 
 exit 0

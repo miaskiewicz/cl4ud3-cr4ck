@@ -4,6 +4,13 @@
 # Writes directly to /dev/tty to bypass Claude Code capture
 # Toggle via: /cr4ck acid
 
+# ── Hidden acid config ───────────────────────────────────────────────────────
+_ACID_303_ENABLED="${_ACID_303_ENABLED:-true}"
+_ACID_STABS_ENABLED="${_ACID_STABS_ENABLED:-true}"
+_ACID_303_BPM="${_ACID_303_BPM:-140}"
+_ACID_STAB_CHANCE="${_ACID_STAB_CHANCE:-0.4}"
+_ACID_STAB_RANDOM_CHANCE="${_ACID_STAB_RANDOM_CHANCE:-0.15}"
+
 # Rainbow palette — full spectrum cycle
 _ACID_COLORS=(196 202 208 214 220 226 190 154 118 82 46 49 51 45 39 33 93 129 165 201)
 
@@ -122,4 +129,87 @@ _acid_effect() {
 _is_acid_active() {
     [ "$CL4UD3_ACID_MODE" = "true" ] && return 0
     return 1
+}
+
+# ── 303 loop + stab integration ──────────────────────────────────────────────
+
+# Start acid 303 loop if not already running
+_acid_start_loop() {
+    _is_acid_active || return 0
+    [ "$_ACID_303_ENABLED" = "true" ] || return 0
+    # Only start if play-midi.sh is sourced (has play_acid_loop)
+    type play_acid_loop >/dev/null 2>&1 || return 0
+    # Already running?
+    [ -f "$_PF_ACID" ] && kill -0 "$(cat "$_PF_ACID" 2>/dev/null)" 2>/dev/null && return 0
+    play_acid_loop "$_ACID_303_BPM"
+}
+
+# Maybe play a beat-synced stab (random chance roll)
+# Works independently of 303 — generates own stabs if needed
+_acid_maybe_stab() {
+    _is_acid_active || return 0
+    [ "$_ACID_STABS_ENABLED" = "true" ] || return 0
+    type play_acid_stab_synced >/dev/null 2>&1 || return 0
+
+    # Ensure beat clock + stab set exist (even without 303)
+    type _ensure_beat_clock >/dev/null 2>&1 && _ensure_beat_clock "$_ACID_303_BPM"
+    type _ensure_stab_set >/dev/null 2>&1 && _ensure_stab_set "$_ACID_303_BPM"
+
+    local roll chance
+    chance="$_ACID_STAB_CHANCE"
+    roll=$(awk "BEGIN { srand(); printf \"%.4f\", rand() }" 2>/dev/null)
+    [ -n "$roll" ] || return 0
+
+    if awk "BEGIN { exit ($roll < $chance) ? 0 : 1 }" 2>/dev/null; then
+        play_acid_stab_synced
+    fi
+}
+
+# Random stab — lower chance, fires independently of tool calls
+# Works independently of 303
+_acid_random_stab() {
+    _is_acid_active || return 0
+    [ "$_ACID_STABS_ENABLED" = "true" ] || return 0
+    type play_acid_stab_synced >/dev/null 2>&1 || return 0
+
+    # Ensure beat clock + stab set exist (even without 303)
+    type _ensure_beat_clock >/dev/null 2>&1 && _ensure_beat_clock "$_ACID_303_BPM"
+    type _ensure_stab_set >/dev/null 2>&1 && _ensure_stab_set "$_ACID_303_BPM"
+
+    local roll chance
+    chance="$_ACID_STAB_RANDOM_CHANCE"
+    roll=$(awk "BEGIN { srand(); printf \"%.4f\", rand() }" 2>/dev/null)
+    [ -n "$roll" ] || return 0
+
+    if awk "BEGIN { exit ($roll < $chance) ? 0 : 1 }" 2>/dev/null; then
+        play_acid_stab_synced
+    fi
+}
+
+# Toggle 303 loop on/off
+_acid_toggle_303() {
+    if [ "$_ACID_303_ENABLED" = "true" ]; then
+        _ACID_303_ENABLED="false"
+        export _ACID_303_ENABLED
+        type kill_acid_loop >/dev/null 2>&1 && kill_acid_loop
+        echo "303: OFF"
+    else
+        _ACID_303_ENABLED="true"
+        export _ACID_303_ENABLED
+        _acid_start_loop
+        echo "303: ON"
+    fi
+}
+
+# Toggle stabs on/off
+_acid_toggle_stabs() {
+    if [ "$_ACID_STABS_ENABLED" = "true" ]; then
+        _ACID_STABS_ENABLED="false"
+        export _ACID_STABS_ENABLED
+        echo "stabs: OFF"
+    else
+        _ACID_STABS_ENABLED="true"
+        export _ACID_STABS_ENABLED
+        echo "stabs: ON"
+    fi
 }

@@ -23,10 +23,16 @@ _PF_SOUND="/tmp/.cl4ud3-cr4ck-sound-pid-$CL4UD3_SID"
 _PF_MUSIC="/tmp/.cl4ud3-cr4ck-music-pid-$CL4UD3_SID"
 _PF_TIMER="/tmp/.cl4ud3-cr4ck-timer-pid-$CL4UD3_SID"
 _PF_LOADING="/tmp/.cl4ud3-cr4ck-loading-pid-$CL4UD3_SID"
+# Acid 303 loop = GLOBAL singleton (one bassline across all terminals)
+# Stabs are per-session but read global beat/dir files
+_PF_ACID="/tmp/.cl4ud3-cr4ck-acid-pid"
+_ACID_BEAT_FILE="/tmp/.cl4ud3-cr4ck-acid-beat"
+_ACID_DIR_FILE="/tmp/.cl4ud3-cr4ck-acid-dir"
+_ACID_STAB_DIR="/tmp/.cl4ud3-cr4ck-acid-stabs-$CL4UD3_SID"
 
 # Clean stale PID files for this session (dead processes)
 cleanup_session_files() {
-    for pf in "$_PF_SOUND" "$_PF_MUSIC" "$_PF_TIMER" "$_PF_LOADING"; do
+    for pf in "$_PF_SOUND" "$_PF_MUSIC" "$_PF_TIMER" "$_PF_LOADING" "$_PF_ACID"; do
         if [ -f "$pf" ]; then
             local pid
             pid=$(cat "$pf" 2>/dev/null)
@@ -39,6 +45,14 @@ cleanup_session_files() {
 
 # Clean stale PID files from ALL sessions (dead processes)
 cleanup_all_stale_files() {
+    # Also check global acid PID
+    if [ -f "$_PF_ACID" ]; then
+        local acid_pid
+        acid_pid=$(cat "$_PF_ACID" 2>/dev/null)
+        if [ -z "$acid_pid" ] || ! kill -0 "$acid_pid" 2>/dev/null; then
+            rm -f "$_PF_ACID" "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE"
+        fi
+    fi
     for pf in /tmp/.cl4ud3-cr4ck-sound-pid-* /tmp/.cl4ud3-cr4ck-music-pid-* /tmp/.cl4ud3-cr4ck-timer-pid-* /tmp/.cl4ud3-cr4ck-loading-pid-*; do
         [ -f "$pf" ] || continue
         local pid
@@ -283,6 +297,227 @@ kill_music_loop() {
     return 0
 }
 
+# ── Acid 303 loop + beat-synced stabs ────────────────────────────────────────
+
+# Write current epoch + bpm to beat file (used for stab sync)
+_acid_write_beat_file() {
+    local bpm="$1"
+    if command -v gdate >/dev/null 2>&1; then
+        gdate +%s.%N > "$_ACID_BEAT_FILE"
+    elif date +%s.%N 2>/dev/null | grep -q '\.'; then
+        date +%s.%N > "$_ACID_BEAT_FILE"
+    else
+        date +%s > "$_ACID_BEAT_FILE"
+    fi
+    echo " $bpm" >> "$_ACID_BEAT_FILE"
+}
+
+# Play generative acid 303 loop — GLOBAL singleton, double-buffered
+# Only one instance runs across all terminals. Stabs read global files.
+play_acid_loop() {
+    local bpm="${1:-140}"
+
+    # Global singleton: if another terminal already runs 303, skip
+    if [ -f "$_PF_ACID" ]; then
+        local existing_pid
+        existing_pid=$(cat "$_PF_ACID" 2>/dev/null)
+        if [ -n "$existing_pid" ] && kill -0 "$existing_pid" 2>/dev/null; then
+            return 0
+        fi
+        # Stale PID file — clean up
+        rm -f "$_PF_ACID"
+    fi
+
+    local my_pidfile="$_PF_ACID"
+    (
+        local next_dir="" prev_dir=""
+
+        while [ -f "$my_pidfile" ]; do
+            local dir
+
+            # Use pre-generated next loop if available (double-buffer)
+            if [ -n "$next_dir" ] && [ -d "$next_dir" ] && [ -f "$next_dir/loop.wav" ]; then
+                dir="$next_dir"
+                next_dir=""
+            else
+                # First iteration or pre-gen failed — generate now
+                dir=$(mktemp -d /tmp/.cl4ud3-acid-XXXXX)
+                python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$dir" >/dev/null 2>&1 || {
+                    rm -rf "$dir"; continue
+                }
+            fi
+
+            # Publish beat + stab dir for all terminals
+            _acid_write_beat_file "$bpm"
+            echo "$dir" > "$_ACID_DIR_FILE"
+
+            # Start generating NEXT loop in background while current plays
+            next_dir=$(mktemp -d /tmp/.cl4ud3-acid-XXXXX)
+            python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$next_dir" >/dev/null 2>&1 &
+            local gen_pid=$!
+
+            # Play current loop.wav blocking (zero gap — next already generating)
+            if [ -n "$WAV_PLAYER" ] && [ -f "$dir/loop.wav" ]; then
+                # shellcheck disable=SC2086
+                $WAV_PLAYER "$dir/loop.wav" >/dev/null 2>&1
+            fi
+
+            # Wait for next generation to finish
+            wait "$gen_pid" 2>/dev/null || { rm -rf "$next_dir"; next_dir=""; }
+
+            # Cleanup previous dir (keep current stab dir alive until next swap)
+            [ -n "$prev_dir" ] && rm -rf "$prev_dir"
+            prev_dir="$dir"
+        done
+
+        # Cleanup on exit
+        [ -n "$prev_dir" ] && rm -rf "$prev_dir"
+        [ -n "$next_dir" ] && rm -rf "$next_dir"
+    ) &
+    local loop_pid=$!
+    if [ -n "$loop_pid" ]; then
+        echo "$loop_pid" > "$_PF_ACID"
+        disown "$loop_pid" 2>/dev/null
+    fi
+}
+
+# Kill acid 303 loop + cleanup global files
+kill_acid_loop() {
+    if [ -f "$_PF_ACID" ]; then
+        local pid
+        pid=$(cat "$_PF_ACID" 2>/dev/null)
+        if [ -n "$pid" ]; then
+            pkill -P "$pid" 2>/dev/null || true
+            kill "$pid" 2>/dev/null || true
+        fi
+        rm -f "$_PF_ACID"
+    fi
+    rm -f "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE"
+    # Cleanup any orphaned acid temp dirs
+    rm -rf /tmp/.cl4ud3-acid-* 2>/dev/null || true
+    return 0
+}
+
+# Check if global 303 loop is running (any terminal)
+is_acid_loop_running() {
+    [ -f "$_PF_ACID" ] || return 1
+    local pid
+    pid=$(cat "$_PF_ACID" 2>/dev/null)
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && return 0
+    return 1
+}
+
+# Ensure global beat clock exists — all stabs sync to this grid
+# Created once, persists until acid mode deactivated
+_ensure_beat_clock() {
+    local bpm="${1:-140}"
+    if [ ! -f "$_ACID_BEAT_FILE" ]; then
+        _acid_write_beat_file "$bpm"
+    fi
+}
+
+# Ensure per-session stab set exists (for stabs-only mode, no 303 needed)
+_ensure_stab_set() {
+    local bpm="${1:-140}"
+    # If 303 running, use its stabs
+    if [ -f "$_ACID_DIR_FILE" ]; then
+        local gdir
+        gdir=$(cat "$_ACID_DIR_FILE" 2>/dev/null)
+        if [ -d "$gdir" ] && ls "$gdir"/stab-*.wav >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    # Generate standalone stab set for this session
+    if [ ! -d "$_ACID_STAB_DIR" ] || ! ls "$_ACID_STAB_DIR"/stab-*.wav >/dev/null 2>&1; then
+        mkdir -p "$_ACID_STAB_DIR"
+        python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$_ACID_STAB_DIR" --duration 3 >/dev/null 2>&1 || return 1
+    fi
+    # Always ensure global clock
+    _ensure_beat_clock "$bpm"
+    return 0
+}
+
+# Play a random stab — reads from 303 dir if running, else own stab set
+# Beat-synced when 303 running, immediate when standalone
+play_acid_stab_synced() {
+    local bpm="${_ACID_303_BPM:-140}"
+
+    # Find stab dir: prefer global 303, fall back to per-session
+    local stab_dir=""
+    if [ -f "$_ACID_DIR_FILE" ]; then
+        stab_dir=$(cat "$_ACID_DIR_FILE" 2>/dev/null)
+        [ -d "$stab_dir" ] || stab_dir=""
+    fi
+    if [ -z "$stab_dir" ] || ! ls "$stab_dir"/stab-*.wav >/dev/null 2>&1; then
+        # No 303 running — use/generate per-session stabs
+        _ensure_stab_set "$bpm" || return 0
+        stab_dir="$_ACID_STAB_DIR"
+    fi
+
+    # Pick random stab
+    local stab
+    stab=$(find "$stab_dir" -maxdepth 1 -name 'stab-*.wav' 2>/dev/null | sort -R | head -1)
+    [ -n "$stab" ] && [ -f "$stab" ] || return 0
+
+    # Beat-sync if beat file exists (303 running), else play immediately
+    if [ -f "$_ACID_BEAT_FILE" ]; then
+        local beat_start beat_bpm
+        beat_start=$(head -1 "$_ACID_BEAT_FILE" 2>/dev/null | tr -d ' ')
+        beat_bpm=$(tail -1 "$_ACID_BEAT_FILE" 2>/dev/null | tr -d ' ')
+
+        if [ -n "$beat_start" ] && [ -n "$beat_bpm" ]; then
+            local now
+            if command -v gdate >/dev/null 2>&1; then
+                now=$(gdate +%s.%N)
+            elif date +%s.%N 2>/dev/null | grep -q '\.'; then
+                now=$(date +%s.%N)
+            else
+                now=$(date +%s)
+            fi
+
+            local wait_time
+            wait_time=$(awk "BEGIN {
+                sixteenth = 60.0 / $beat_bpm / 4;
+                elapsed = $now - $beat_start;
+                beat_pos = elapsed - int(elapsed / sixteenth) * sixteenth;
+                wait = sixteenth - beat_pos;
+                if (wait < 0.01) wait = sixteenth;
+                printf \"%.4f\", wait;
+            }" 2>/dev/null)
+            [ -n "$wait_time" ] || wait_time="0.05"
+
+            (
+                sleep "$wait_time" 2>/dev/null || true
+                if [ -n "$WAV_PLAYER" ] && [ -f "$stab" ]; then
+                    # shellcheck disable=SC2086
+                    $WAV_PLAYER "$stab" >/dev/null 2>&1
+                fi
+            ) &
+            disown $! 2>/dev/null || true
+            return 0
+        fi
+    fi
+
+    # No beat file — play immediately in background
+    if [ -n "$WAV_PLAYER" ] && [ -f "$stab" ]; then
+        (
+            # shellcheck disable=SC2086
+            $WAV_PLAYER "$stab" >/dev/null 2>&1
+        ) &
+        disown $! 2>/dev/null || true
+    fi
+}
+
+# Play a WAV file in blocking mode (used by acid loop)
+play_wav_blocking() {
+    local file="$1"
+    [ ! -f "$file" ] && return 1
+    if [ -n "$WAV_PLAYER" ]; then
+        # shellcheck disable=SC2086
+        $WAV_PLAYER "$file" >/dev/null 2>&1
+    fi
+}
+
 # Nuclear option: kill ALL cl4ud3 sounds across ALL sessions
 # Use only for manual cleanup, not in hooks
 kill_all_sounds() {
@@ -291,6 +526,7 @@ kill_all_sounds() {
     killall pw-play 2>/dev/null || true
     killall paplay 2>/dev/null || true
     killall aplay 2>/dev/null || true
-    rm -f /tmp/.cl4ud3-cr4ck-sound-pid-* /tmp/.cl4ud3-cr4ck-music-pid-* /tmp/.cl4ud3-cr4ck-timer-pid-* /tmp/.cl4ud3-cr4ck-loading-pid-*
+    rm -f /tmp/.cl4ud3-cr4ck-sound-pid-* /tmp/.cl4ud3-cr4ck-music-pid-* /tmp/.cl4ud3-cr4ck-timer-pid-* /tmp/.cl4ud3-cr4ck-loading-pid-* /tmp/.cl4ud3-cr4ck-acid-pid /tmp/.cl4ud3-cr4ck-acid-beat /tmp/.cl4ud3-cr4ck-acid-dir
+    rm -rf /tmp/.cl4ud3-acid-* /tmp/.cl4ud3-cr4ck-acid-stabs-* 2>/dev/null || true
     return 0
 }
