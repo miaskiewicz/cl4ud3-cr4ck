@@ -248,6 +248,81 @@ def generate_modem_sounds():
             "dial_freq": 600,
             "dial_dur": 0.05,
         },
+        # 9: Corrupt — bit-crushed feel, sample drops, heavy noise
+        {
+            "name": "dialup-09-corrupt.wav",
+            "scramble_dur": 0.7,
+            "freq_range": (150, 5500),
+            "change_speed": (2, 10),
+            "num_voices": 3,
+            "noise_amt": 0.14,
+            "stutter_chance": 0.02,
+            "waveforms": [_square, _square, _square],
+            "intro": "dual_tone",
+            "outro": "noise_burst",
+            "dial_freq": 950,
+            "dial_dur": 0.07,
+        },
+        # 10: Surge — power surge, extreme freq range, saw+triangle
+        {
+            "name": "dialup-10-surge.wav",
+            "scramble_dur": 0.55,
+            "freq_range": (80, 7000),
+            "change_speed": (2, 8),
+            "num_voices": 2,
+            "noise_amt": 0.1,
+            "stutter_chance": 0.007,
+            "waveforms": [_saw, _triangle],
+            "intro": "chirp_up",
+            "outro": "stutter_stop",
+            "dial_freq": 2200,
+            "dial_dur": 0.04,
+        },
+        # 11: Fracture — broken connection, extreme stutter, big gaps
+        {
+            "name": "dialup-11-fracture.wav",
+            "scramble_dur": 0.85,
+            "freq_range": (250, 4500),
+            "change_speed": (3, 15),
+            "num_voices": 2,
+            "noise_amt": 0.08,
+            "stutter_chance": 0.025,
+            "waveforms": [_square, _saw],
+            "intro": "warble",
+            "outro": "long_lock",
+            "dial_freq": 1600,
+            "dial_dur": 0.03,
+        },
+        # 12: Overdrive — clipping, 4 voices, narrow band, loud
+        {
+            "name": "dialup-12-overdrive.wav",
+            "scramble_dur": 0.75,
+            "freq_range": (800, 2200),
+            "change_speed": (6, 18),
+            "num_voices": 4,
+            "noise_amt": 0.15,
+            "stutter_chance": 0.01,
+            "waveforms": [_saw, _saw, _square, _triangle],
+            "intro": "screech_down",
+            "outro": "stutter_stop",
+            "dial_freq": 1200,
+            "dial_dur": 0.05,
+        },
+        # 13: Glitch — maximum chaos, 3 voices, wild freq, high stutter
+        {
+            "name": "dialup-13-glitch.wav",
+            "scramble_dur": 0.9,
+            "freq_range": (100, 8000),
+            "change_speed": (1, 6),
+            "num_voices": 3,
+            "noise_amt": 0.16,
+            "stutter_chance": 0.018,
+            "waveforms": [_square, _triangle, _saw],
+            "intro": "none",
+            "outro": "noise_burst",
+            "dial_freq": 0,
+            "dial_dur": 0,
+        },
     ]
 
     for cfg in configs:
@@ -255,43 +330,69 @@ def generate_modem_sounds():
         intro = cfg.get("intro", "chirp_up")
         outro = cfg.get("outro", "lock")
 
+        # Per-run jitter so no two runs produce identical output
+        freq_jitter = random.uniform(-80, 80)
+        dur_jitter = random.uniform(-0.008, 0.008)
+        vol_jitter = random.uniform(-0.04, 0.04)
+
+        def _jf(f):
+            """Jitter a frequency."""
+            return max(50, f + freq_jitter + random.uniform(-20, 20))
+
+        def _jd(d):
+            """Jitter a duration (keep positive)."""
+            return max(0.005, d + dur_jitter + random.uniform(-0.003, 0.003))
+
+        def _jv(v):
+            """Jitter a volume (keep 0.05-0.7)."""
+            return max(0.05, min(0.7, v + vol_jitter * random.uniform(0.3, 1.0)))
+
         # --- INTRO: each sound starts differently ---
         if intro == "chirp_up" and cfg["dial_dur"] > 0:
             # Dial tone + rising chirp
-            samples.extend(_generate_tone(cfg["dial_freq"], cfg["dial_dur"], _square, 0.5))
-            samples.extend([0.0] * int(SAMPLE_RATE * 0.03))
+            samples.extend(_generate_tone(_jf(cfg["dial_freq"]), _jd(cfg["dial_dur"]), _square, _jv(0.5)))
+            samples.extend([0.0] * int(SAMPLE_RATE * _jd(0.03)))
             phase = 0.0
-            chirp_dur = 0.08
+            chirp_dur = _jd(0.08)
+            chirp_base = _jf(600)
+            chirp_range = 2000 + random.uniform(-200, 200)
             for i in range(int(SAMPLE_RATE * chirp_dur)):
-                freq = 600 + (i / (SAMPLE_RATE * chirp_dur)) * 2000
+                freq = chirp_base + (i / (SAMPLE_RATE * chirp_dur)) * chirp_range
                 phase += _freq_to_phase_inc(freq)
-                samples.append(_square(phase) * 0.3)
-            samples.extend([0.0] * int(SAMPLE_RATE * 0.02))
+                samples.append(_square(phase) * _jv(0.3))
+            samples.extend([0.0] * int(SAMPLE_RATE * _jd(0.02)))
         elif intro == "screech_down":
             # High-to-low screech — sounds like modem answering
-            samples.extend(_generate_tone(cfg["dial_freq"], cfg["dial_dur"], _saw, 0.4))
+            samples.extend(_generate_tone(_jf(cfg["dial_freq"]), _jd(cfg["dial_dur"]), _saw, _jv(0.4)))
             phase = 0.0
-            for i in range(int(SAMPLE_RATE * 0.12)):
-                freq = 4000 - (i / (SAMPLE_RATE * 0.12)) * 3200
+            screech_dur = _jd(0.12)
+            screech_hi = _jf(4000)
+            screech_range = 3200 + random.uniform(-300, 300)
+            for i in range(int(SAMPLE_RATE * screech_dur)):
+                freq = screech_hi - (i / (SAMPLE_RATE * screech_dur)) * screech_range
                 phase += _freq_to_phase_inc(freq)
-                samples.append(_saw(phase) * 0.35)
-            samples.extend([0.0] * int(SAMPLE_RATE * 0.03))
+                samples.append(_saw(phase) * _jv(0.35))
+            samples.extend([0.0] * int(SAMPLE_RATE * _jd(0.03)))
         elif intro == "dual_tone":
             # Two simultaneous tones — DTMF-style
             phase_a, phase_b = 0.0, 0.0
-            for i in range(int(SAMPLE_RATE * cfg["dial_dur"])):
-                phase_a += _freq_to_phase_inc(cfg["dial_freq"])
-                phase_b += _freq_to_phase_inc(cfg["dial_freq"] * 1.5)
-                samples.append(_square(phase_a) * 0.2 + _triangle(phase_b) * 0.2)
-            samples.extend([0.0] * int(SAMPLE_RATE * 0.04))
+            dt_freq_a = _jf(cfg["dial_freq"])
+            dt_ratio = 1.5 + random.uniform(-0.08, 0.08)
+            for i in range(int(SAMPLE_RATE * _jd(cfg["dial_dur"]))):
+                phase_a += _freq_to_phase_inc(dt_freq_a)
+                phase_b += _freq_to_phase_inc(dt_freq_a * dt_ratio)
+                samples.append(_square(phase_a) * _jv(0.2) + _triangle(phase_b) * _jv(0.2))
+            samples.extend([0.0] * int(SAMPLE_RATE * _jd(0.04)))
         elif intro == "warble":
             # Rapid frequency wobble
             phase = 0.0
-            for i in range(int(SAMPLE_RATE * 0.1)):
-                freq = cfg["dial_freq"] + math.sin(i * 0.08) * 600
+            warble_rate = 0.08 + random.uniform(-0.02, 0.02)
+            warble_depth = 600 + random.uniform(-100, 100)
+            for i in range(int(SAMPLE_RATE * _jd(0.1))):
+                freq = _jf(cfg["dial_freq"]) + math.sin(i * warble_rate) * warble_depth
                 phase += _freq_to_phase_inc(freq)
-                samples.append(_square(phase) * 0.3)
-            samples.extend([0.0] * int(SAMPLE_RATE * 0.02))
+                samples.append(_square(phase) * _jv(0.3))
+            samples.extend([0.0] * int(SAMPLE_RATE * _jd(0.02)))
         elif intro == "fade_in":
             # No intro blip — scramble fades in from silence
             pass
@@ -315,22 +416,26 @@ def generate_modem_sounds():
         # --- OUTRO: each sound ends differently ---
         if outro == "lock":
             # Standard lock blip
-            samples.extend(_generate_tone(2100, 0.08, _square, 0.25))
+            samples.extend(_generate_tone(_jf(2100), _jd(0.08), _square, _jv(0.25)))
         elif outro == "long_lock":
             # Extended lock tone — sounds like connection established
-            samples.extend(_generate_tone(1800, 0.04, _square, 0.2))
-            samples.extend([0.0] * int(SAMPLE_RATE * 0.02))
-            samples.extend(_generate_tone(2100, 0.12, _square, 0.25))
+            samples.extend(_generate_tone(_jf(1800), _jd(0.04), _square, _jv(0.2)))
+            samples.extend([0.0] * int(SAMPLE_RATE * _jd(0.02)))
+            samples.extend(_generate_tone(_jf(2100), _jd(0.12), _square, _jv(0.25)))
         elif outro == "noise_burst":
             # White noise burst — like static discharge
-            for _ in range(int(SAMPLE_RATE * 0.06)):
-                samples.append(_noise() * 0.2)
+            burst_len = int(SAMPLE_RATE * _jd(0.06))
+            burst_vol = _jv(0.2)
+            for _ in range(burst_len):
+                samples.append(_noise() * burst_vol)
         elif outro == "stutter_stop":
             # Rapid on-off stuttering to silence
-            for j in range(5):
-                vol = 0.25 * (1 - j / 5)
-                samples.extend(_generate_tone(1500, 0.015, _square, vol))
-                samples.extend([0.0] * int(SAMPLE_RATE * 0.015))
+            stutter_count = random.choice([4, 5, 6])
+            stutter_freq = _jf(1500)
+            for j in range(stutter_count):
+                vol = _jv(0.25) * (1 - j / stutter_count)
+                samples.extend(_generate_tone(stutter_freq, _jd(0.015), _square, vol))
+                samples.extend([0.0] * int(SAMPLE_RATE * _jd(0.015)))
         # outro == "fade": just fade out (handled below)
 
         # Fade out (all sounds get this, but length varies)
@@ -437,7 +542,7 @@ def main():
     print("  ================================\n")
     print("  8-bit · 22050Hz · pure garbage\n")
 
-    print("  [*] Generating modem sounds (5 variations)...")
+    print("  [*] Generating modem sounds (13 variations)...")
     generate_modem_sounds()
 
     print("  [*] Generating error sounds...")
