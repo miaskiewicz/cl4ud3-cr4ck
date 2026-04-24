@@ -356,6 +356,8 @@ _play_midi_blocking() {
 
 play_acid_loop() {
     local bpm="${1:-140}"
+    local batch_size=8
+    local repeats=2  # play each pattern twice before moving on
 
     # Global singleton: if another terminal already runs 303, skip
     if [ -f "$_PF_ACID" ]; then
@@ -371,36 +373,72 @@ play_acid_loop() {
 
     local my_pidfile="$_PF_ACID"
     (
-        local prev_dir=""
+        local cur_dir="" next_dir="" prev_dir="" gen_pid=""
+
+        # Generate first batch
+        cur_dir=$(mktemp -d /tmp/.cl4ud3-acid-XXXXX)
+        python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$cur_dir" --count "$batch_size" >/dev/null 2>&1 || {
+            rm -rf "$cur_dir"; exit 1
+        }
 
         while [ -f "$my_pidfile" ]; do
             if _acid_is_idle; then
                 break
             fi
 
-            # Generate MIDI — instant, no double-buffering needed
-            local dir
-            dir=$(mktemp -d /tmp/.cl4ud3-acid-XXXXX)
-            python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$dir" >/dev/null 2>&1 || {
-                rm -rf "$dir"; continue
-            }
-
-            # Publish beat + stab dir for all terminals
+            # Publish stab dir for all terminals
             _acid_write_beat_file "$bpm"
-            echo "$dir" > "$_ACID_DIR_FILE"
+            echo "$cur_dir" > "$_ACID_DIR_FILE"
 
-            # Play loop.mid blocking
-            if [ -f "$dir/loop.mid" ]; then
-                _play_midi_blocking "$dir/loop.mid"
+            # Play through batch — each loop repeated
+            local i=0
+            for loop_file in "$cur_dir"/loop-*.mid; do
+                [ -f "$loop_file" ] || continue
+                i=$((i + 1))
+
+                # At midpoint, pre-generate next batch in background
+                if [ "$i" -eq $((batch_size / 2)) ] && [ -z "$gen_pid" ]; then
+                    next_dir=$(mktemp -d /tmp/.cl4ud3-acid-XXXXX)
+                    python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$next_dir" --count "$batch_size" >/dev/null 2>&1 &
+                    gen_pid=$!
+                fi
+
+                # Play with repeats
+                local r
+                for r in $(seq 1 $repeats); do
+                    [ -f "$my_pidfile" ] || break
+                    _acid_is_idle && break 3
+                    _play_midi_blocking "$loop_file"
+                done
+            done
+
+            # Wait for next batch if still generating
+            if [ -n "$gen_pid" ]; then
+                wait "$gen_pid" 2>/dev/null || { rm -rf "$next_dir"; next_dir=""; }
+                gen_pid=""
             fi
 
-            # Cleanup previous dir
+            # Swap to next batch
             [ -n "$prev_dir" ] && rm -rf "$prev_dir"
-            prev_dir="$dir"
+            prev_dir="$cur_dir"
+
+            if [ -n "$next_dir" ] && [ -d "$next_dir" ]; then
+                cur_dir="$next_dir"
+                next_dir=""
+            else
+                # No next batch ready — generate fresh
+                cur_dir=$(mktemp -d /tmp/.cl4ud3-acid-XXXXX)
+                python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$cur_dir" --count "$batch_size" >/dev/null 2>&1 || {
+                    rm -rf "$cur_dir"; break
+                }
+            fi
         done
 
         # Cleanup on exit
+        [ -n "$gen_pid" ] && { kill "$gen_pid" 2>/dev/null; wait "$gen_pid" 2>/dev/null; }
         [ -n "$prev_dir" ] && rm -rf "$prev_dir"
+        [ -n "$cur_dir" ] && rm -rf "$cur_dir"
+        [ -n "$next_dir" ] && rm -rf "$next_dir"
         rm -f "$my_pidfile" "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE" "$_ACID_ACTIVITY_FILE"
     ) &
     local loop_pid=$!

@@ -597,7 +597,7 @@ teardown() {
 
 @test "play-midi.sh: play_acid_loop plays loop.mid blocking" {
     run grep -A60 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    assert_output --partial "loop.mid"
+    assert_output --partial "loop-*.mid"
     assert_output --partial '_play_midi_blocking'
 }
 
@@ -612,7 +612,7 @@ teardown() {
 }
 
 @test "play-midi.sh: play_acid_loop disowns background process" {
-    run grep -A80 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    run grep -A95 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial "disown"
 }
 
@@ -627,10 +627,18 @@ teardown() {
     assert_output --partial "return 0"
 }
 
-@test "play-midi.sh: play_acid_loop generates MIDI inline (no double-buffer needed)" {
-    run grep -A50 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    assert_output --partial "Generate MIDI"
+@test "play-midi.sh: play_acid_loop generates batch of patterns" {
+    run grep -A80 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "batch_size"
+    assert_output --partial "--count"
     assert_output --partial "acid-303.py"
+}
+
+@test "play-midi.sh: play_acid_loop pre-generates next batch at midpoint" {
+    run grep -A80 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "midpoint"
+    assert_output --partial "next_dir"
+    assert_output --partial "gen_pid"
 }
 
 @test "play-midi.sh: play_acid_loop passes bpm to acid-303.py" {
@@ -1261,11 +1269,11 @@ print('ok')
 @test "acid-303.py: generate() sets MIDI program and CCs for bass" {
     run grep -A20 'def generate(' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
     assert_output --partial "BASS_PROGRAM"
-    assert_output --partial "addControllerEvent"
+    assert_output --partial "_write_bassline"
 }
 
 @test "acid-303.py: generate() writes loop.mid and stab MIDIs" {
-    run grep -A30 'def generate(' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    run grep -A35 'def generate(' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
     assert_output --partial "loop.mid"
     assert_output --partial "stab-"
 }
@@ -1279,20 +1287,16 @@ print('ok')
 # Integration — Full Loop Architecture
 # ═══════���════════════════���════════════════════════════════════���═════════════════
 
-@test "integration: acid loop architecture — generate → beat file → play MIDI" {
-    # Verify the loop structure in play_acid_loop
-    run grep -A50 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    # Creates temp dir
+@test "integration: acid loop architecture — batch generate → play → pre-gen next" {
+    run grep -A80 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial "mktemp -d"
-    # Calls acid-303.py
     assert_output --partial "acid-303.py"
-    # Writes beat file
+    assert_output --partial "--count"
     assert_output --partial "_acid_write_beat_file"
-    # Writes dir file
     assert_output --partial "_ACID_DIR_FILE"
-    # Plays loop.mid via MIDI
-    assert_output --partial "loop.mid"
+    assert_output --partial "loop-*.mid"
     assert_output --partial "_play_midi_blocking"
+    assert_output --partial "next_dir"
 }
 
 @test "integration: stab trigger reads beat file and stab dir" {
@@ -1396,10 +1400,10 @@ print('ok')
 # Double-Buffer Architecture
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@test "play-midi.sh: acid loop cleans up prev_dir" {
-    run grep -A50 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+@test "play-midi.sh: acid loop cleans up dirs on exit" {
+    run grep -A90 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial "prev_dir"
-    assert_output --partial "Cleanup"
+    assert_output --partial "Cleanup on exit"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════

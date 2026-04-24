@@ -66,13 +66,31 @@ def _generate_pattern(note_pool, steps=16):
     return pattern
 
 
+def _write_filter_envelope(midi, track, channel, beat_pos, step_beats, accent=False):
+    """Write per-note CC74 filter sweep — the classic 303 squelch."""
+    if accent:
+        cc_start, cc_end, steps = 125, 35, 6
+    else:
+        cc_start, cc_end, steps = 95, 45, 4
+
+    for s in range(steps):
+        t = beat_pos + s * (step_beats / steps)
+        # Exponential-ish decay curve
+        ratio = (s / max(1, steps - 1)) ** 0.5
+        cc_val = int(cc_start - (cc_start - cc_end) * ratio)
+        midi.addControllerEvent(track, channel, t, 74, max(0, min(127, cc_val)))
+
+
 def _write_bassline(midi, track, channel, note_pool, bpm=140, target_duration=17):
-    """Write 303 bassline as MIDI notes on given track/channel."""
+    """Write 303 bassline as MIDI notes with filter sweeps and portamento."""
     step_beats = 0.25  # 16th note = quarter beat
     target_beats = target_duration * bpm / 60.0
 
     num_patterns = random.choice([2, 3])
     patterns = [_generate_pattern(note_pool) for _ in range(num_patterns)]
+
+    # High resonance for acid character
+    midi.addControllerEvent(track, channel, 0, 71, 115)
 
     beat_pos = 0.0
 
@@ -95,16 +113,25 @@ def _write_bassline(midi, track, channel, note_pool, bpm=140, target_duration=17
 
                 if step["type"] == "note":
                     velocity = 110 if step["accent"] else 80
-                    # Slightly shorter than step for articulation (staccato)
                     dur = step_beats * 0.8
 
-                    # Slides: extend previous note to overlap, creating legato
+                    # Portamento for slides
                     if step.get("slide") and prev_note is not None:
+                        midi.addControllerEvent(track, channel, beat_pos, 65, 127)
+                        midi.addControllerEvent(track, channel, beat_pos, 5, 30)
                         dur = step_beats * 0.95  # near-legato
+                    else:
+                        midi.addControllerEvent(track, channel, beat_pos, 65, 0)
+
+                    # Per-note filter envelope — the squelch
+                    _write_filter_envelope(midi, track, channel, beat_pos, step_beats,
+                                           accent=step["accent"])
 
                     midi.addNote(track, channel, step["midi"], beat_pos, dur, velocity)
                     prev_note = step["midi"]
                 else:
+                    # Rest — close filter
+                    midi.addControllerEvent(track, channel, beat_pos, 74, 30)
                     prev_note = None
 
                 beat_pos += step_beats
@@ -224,24 +251,32 @@ STAB_GENERATORS = [
 
 # ── Main Generation ──────────────────────────────────────────────────────────
 
-def generate(bpm, output_dir, target_duration=17):
-    """Generate loop.mid + stab-{01..08}.mid in output_dir."""
+def generate(bpm, output_dir, target_duration=17, count=1):
+    """Generate loop MIDIs + stab MIDIs in output_dir.
+
+    count=1: single loop.mid (backward compat)
+    count>1: loop-01.mid through loop-{count}.mid (batch mode)
+    All loops share same key for harmonic continuity.
+    """
     os.makedirs(output_dir, exist_ok=True)
 
     key_name, root_midi, note_pool = _pick_key()
 
-    # ── Bassline MIDI ──
-    bass_midi = MIDIFile(1, deinterleave=False)
-    bass_midi.addTempo(0, 0, bpm)
-    bass_midi.addProgramChange(0, 0, 0, BASS_PROGRAM)
-    # High resonance + brightness for acid character
-    bass_midi.addControllerEvent(0, 0, 0, 71, 115)  # Resonance
-    bass_midi.addControllerEvent(0, 0, 0, 74, 100)   # Brightness/Cutoff
+    # ── Bassline MIDI(s) ──
+    for n in range(count):
+        bass_midi = MIDIFile(1, deinterleave=False)
+        bass_midi.addTempo(0, 0, bpm)
+        bass_midi.addProgramChange(0, 0, 0, BASS_PROGRAM)
 
-    _write_bassline(bass_midi, 0, 0, note_pool, bpm=bpm, target_duration=target_duration)
+        _write_bassline(bass_midi, 0, 0, note_pool, bpm=bpm, target_duration=target_duration)
 
-    with open(os.path.join(output_dir, "loop.mid"), "wb") as f:
-        bass_midi.writeFile(f)
+        if count == 1:
+            fname = "loop.mid"
+        else:
+            fname = f"loop-{n+1:02d}.mid"
+
+        with open(os.path.join(output_dir, fname), "wb") as f:
+            bass_midi.writeFile(f)
 
     # ── Stab MIDIs ──
     for i, gen_func in enumerate(STAB_GENERATORS):
@@ -260,9 +295,10 @@ def main():
     parser.add_argument("--bpm", type=int, default=140, help="BPM (default: 140)")
     parser.add_argument("--output-dir", required=True, help="Output directory for MIDIs")
     parser.add_argument("--duration", type=int, default=17, help="Target loop duration in seconds")
+    parser.add_argument("--count", type=int, default=1, help="Number of loop variations to generate")
     args = parser.parse_args()
 
-    key = generate(args.bpm, args.output_dir, target_duration=args.duration)
+    key = generate(args.bpm, args.output_dir, target_duration=args.duration, count=args.count)
     print(f"key={key} bpm={args.bpm} dir={args.output_dir}")
 
 
