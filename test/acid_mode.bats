@@ -147,7 +147,7 @@ teardown() {
 
 @test "acid-mode.sh: config vars are exported with defaults" {
     source "$CL4UD3_HOME/hooks/acid-mode.sh"
-    [ "$_ACID_303_ENABLED" = "true" ]
+    [ "$_ACID_303_ENABLED" = "false" ]
     [ "$_ACID_STABS_ENABLED" = "true" ]
     [ "$_ACID_303_BPM" = "140" ]
     [ "$_ACID_STAB_CHANCE" = "0.4" ]
