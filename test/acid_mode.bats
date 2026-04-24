@@ -595,10 +595,10 @@ teardown() {
     assert_output --partial '_ACID_DIR_FILE'
 }
 
-@test "play-midi.sh: play_acid_loop plays loop.wav blocking" {
+@test "play-midi.sh: play_acid_loop plays loop.mid blocking" {
     run grep -A60 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    assert_output --partial "loop.wav"
-    assert_output --partial 'WAV_PLAYER'
+    assert_output --partial "loop.mid"
+    assert_output --partial '_play_midi_blocking'
 }
 
 @test "play-midi.sh: play_acid_loop cleans up dirs on exit" {
@@ -627,16 +627,10 @@ teardown() {
     assert_output --partial "return 0"
 }
 
-@test "play-midi.sh: play_acid_loop double-buffers next generation" {
-    run grep -A60 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    assert_output --partial "next_dir"
-    assert_output --partial "double-buffer"
-}
-
-@test "play-midi.sh: play_acid_loop generates next while current plays" {
-    run grep -A60 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    assert_output --partial "gen_pid"
-    assert_output --partial "wait"
+@test "play-midi.sh: play_acid_loop generates MIDI inline (no double-buffer needed)" {
+    run grep -A50 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "Generate MIDI"
+    assert_output --partial "acid-303.py"
 }
 
 @test "play-midi.sh: play_acid_loop passes bpm to acid-303.py" {
@@ -706,7 +700,7 @@ teardown() {
 
 @test "play-midi.sh: stab_synced picks random stab from dir" {
     run grep -A60 'play_acid_stab_synced()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    assert_output --partial "stab-*.wav"
+    assert_output --partial "stab-*.mid"
     assert_output --partial "sort -R"
 }
 
@@ -771,20 +765,20 @@ teardown() {
 # play-midi.sh — play_wav_blocking Function
 # ══════���═══════════════��════════════════════════════════��═══════════════════════
 
-@test "play-midi.sh: defines play_wav_blocking function" {
-    run grep 'play_wav_blocking()' "$CL4UD3_HOME/hooks/play-midi.sh"
+@test "play-midi.sh: defines _play_midi_blocking function" {
+    run grep '_play_midi_blocking()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_success
 }
 
-@test "play-midi.sh: play_wav_blocking returns 1 for missing file" {
+@test "play-midi.sh: _play_midi_blocking returns 1 for missing file" {
     source "$CL4UD3_HOME/hooks/play-midi.sh"
-    run play_wav_blocking "/tmp/nonexistent.wav"
+    run _play_midi_blocking "/tmp/nonexistent.mid"
     assert_failure
 }
 
-@test "play-midi.sh: play_wav_blocking uses WAV_PLAYER" {
-    run grep -A5 'play_wav_blocking()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    assert_output --partial 'WAV_PLAYER'
+@test "play-midi.sh: _play_midi_blocking supports fluidsynth" {
+    run grep -A10 '_play_midi_blocking()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial 'fluidsynth'
 }
 
 # ══════════════════════════════════════���════════════════════════════════════════
@@ -960,28 +954,28 @@ teardown() {
     assert_success
 }
 
-@test "acid-303.py: generates loop.wav" {
+@test "acid-303.py: generates loop.mid" {
     local dir
     dir=$(mktemp -d /tmp/.cl4ud3-acid-test-XXXXX)
     run python3 "$BATS_TEST_DIRNAME/../tools/acid-303.py" --bpm 140 --output-dir "$dir" --duration 3
     assert_success
-    [ -f "$dir/loop.wav" ]
+    [ -f "$dir/loop.mid" ]
     rm -rf "$dir"
 }
 
-@test "acid-303.py: generates 8 stab WAVs" {
+@test "acid-303.py: generates 8 stab MIDIs" {
     local dir
     dir=$(mktemp -d /tmp/.cl4ud3-acid-test-XXXXX)
     run python3 "$BATS_TEST_DIRNAME/../tools/acid-303.py" --bpm 140 --output-dir "$dir" --duration 3
     assert_success
-    [ -f "$dir/stab-01.wav" ]
-    [ -f "$dir/stab-02.wav" ]
-    [ -f "$dir/stab-03.wav" ]
-    [ -f "$dir/stab-04.wav" ]
-    [ -f "$dir/stab-05.wav" ]
-    [ -f "$dir/stab-06.wav" ]
-    [ -f "$dir/stab-07.wav" ]
-    [ -f "$dir/stab-08.wav" ]
+    [ -f "$dir/stab-01.mid" ]
+    [ -f "$dir/stab-02.mid" ]
+    [ -f "$dir/stab-03.mid" ]
+    [ -f "$dir/stab-04.mid" ]
+    [ -f "$dir/stab-05.mid" ]
+    [ -f "$dir/stab-06.mid" ]
+    [ -f "$dir/stab-07.mid" ]
+    [ -f "$dir/stab-08.mid" ]
     rm -rf "$dir"
 }
 
@@ -1003,31 +997,31 @@ teardown() {
     python3 "$BATS_TEST_DIRNAME/../tools/acid-303.py" --bpm 140 --output-dir "$dir2" --duration 3
     # Files should differ (different random seeds)
     local md5_1 md5_2
-    md5_1=$(md5sum "$dir1/loop.wav" 2>/dev/null | cut -d' ' -f1 || md5 -q "$dir1/loop.wav" 2>/dev/null)
-    md5_2=$(md5sum "$dir2/loop.wav" 2>/dev/null | cut -d' ' -f1 || md5 -q "$dir2/loop.wav" 2>/dev/null)
+    md5_1=$(md5sum "$dir1/loop.mid" 2>/dev/null | cut -d' ' -f1 || md5 -q "$dir1/loop.mid" 2>/dev/null)
+    md5_2=$(md5sum "$dir2/loop.mid" 2>/dev/null | cut -d' ' -f1 || md5 -q "$dir2/loop.mid" 2>/dev/null)
     [ "$md5_1" != "$md5_2" ]
     rm -rf "$dir1" "$dir2"
 }
 
-@test "acid-303.py: loop.wav is valid RIFF WAV" {
+@test "acid-303.py: loop.mid is valid MIDI" {
     local dir
     dir=$(mktemp -d /tmp/.cl4ud3-acid-test-XXXXX)
     python3 "$BATS_TEST_DIRNAME/../tools/acid-303.py" --bpm 140 --output-dir "$dir" --duration 3
-    # Check RIFF header
+    # Check MThd header
     local header
-    header=$(head -c 4 "$dir/loop.wav")
-    [ "$header" = "RIFF" ]
+    header=$(head -c 4 "$dir/loop.mid")
+    [ "$header" = "MThd" ]
     rm -rf "$dir"
 }
 
-@test "acid-303.py: stab WAVs are valid RIFF WAV" {
+@test "acid-303.py: stab MIDIs are valid MIDI" {
     local dir
     dir=$(mktemp -d /tmp/.cl4ud3-acid-test-XXXXX)
     python3 "$BATS_TEST_DIRNAME/../tools/acid-303.py" --bpm 140 --output-dir "$dir" --duration 3
     for i in 01 02 03 04 05 06 07 08; do
         local header
-        header=$(head -c 4 "$dir/stab-$i.wav")
-        [ "$header" = "RIFF" ]
+        header=$(head -c 4 "$dir/stab-$i.mid")
+        [ "$header" = "MThd" ]
     done
     rm -rf "$dir"
 }
@@ -1041,26 +1035,12 @@ teardown() {
     rm -rf "$dir"
 }
 
-@test "acid-303.py: loop.wav is 16-bit mono 44100Hz" {
+@test "acid-303.py: loop.mid detected as MIDI by file command" {
     local dir
     dir=$(mktemp -d /tmp/.cl4ud3-acid-test-XXXXX)
     python3 "$BATS_TEST_DIRNAME/../tools/acid-303.py" --bpm 140 --output-dir "$dir" --duration 3
-    run file "$dir/loop.wav"
-    assert_output --partial "WAVE audio"
-    assert_output --partial "16 bit"
-    assert_output --partial "mono"
-    assert_output --partial "44100 Hz"
-    rm -rf "$dir"
-}
-
-@test "acid-303.py: stab WAVs are 16-bit mono 44100Hz" {
-    local dir
-    dir=$(mktemp -d /tmp/.cl4ud3-acid-test-XXXXX)
-    python3 "$BATS_TEST_DIRNAME/../tools/acid-303.py" --bpm 140 --output-dir "$dir" --duration 3
-    run file "$dir/stab-01.wav"
-    assert_output --partial "16 bit"
-    assert_output --partial "mono"
-    assert_output --partial "44100 Hz"
+    run file "$dir/loop.mid"
+    assert_output --partial "MIDI"
     rm -rf "$dir"
 }
 
@@ -1073,14 +1053,15 @@ teardown() {
     rm -rf "$dir"
 }
 
-@test "acid-303.py: uses only stdlib (no external imports)" {
-    # Should not import anything outside stdlib
-    run grep '^import\|^from' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+@test "acid-303.py: uses midiutil for MIDI generation" {
+    run grep '^from midiutil' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
     assert_success
+    # Should not import heavy DSP/audio libs
+    run grep '^import\|^from' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
     refute_output --partial "numpy"
     refute_output --partial "scipy"
-    refute_output --partial "midiutil"
     refute_output --partial "pydub"
+    refute_output --partial "wave"
 }
 
 # ═══════���═════════════════════════════��═══════════════════════��═════════════════
@@ -1102,15 +1083,16 @@ teardown() {
     assert_success
 }
 
-@test "acid-303.py: pick_key returns key name" {
+@test "acid-303.py: pick_key returns key name and MIDI notes" {
     run python3 -c "
 import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
 from importlib.machinery import SourceFileLoader
 m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-name, freq, notes = m._pick_key()
+name, root_midi, notes = m._pick_key()
 assert name in ('Am', 'Dm', 'Gm', 'Cm', 'Em'), f'unexpected key: {name}'
-assert freq > 0
-assert len(notes) > 0
+assert isinstance(root_midi, int), f'expected int root, got {type(root_midi)}'
+assert all(isinstance(n, int) for n in notes), 'notes should be MIDI ints'
+assert all(30 <= n <= 80 for n in notes), 'notes out of MIDI range'
 print('ok')
 "
     assert_success
@@ -1121,124 +1103,11 @@ print('ok')
 # acid-303.py — DSP Components
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@test "acid-303.py: has ResonantFilter class" {
-    run grep 'class ResonantFilter' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+@test "acid-303.py: has GM program constants" {
+    run grep 'BASS_PROGRAM\|LEAD_PROGRAM\|PAD_PROGRAM' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
     assert_success
 }
 
-@test "acid-303.py: has Delay class" {
-    run grep 'class Delay' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_success
-}
-
-@test "acid-303.py: has CombReverb class" {
-    run grep 'class CombReverb' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_success
-}
-
-@test "acid-303.py: has _saw function" {
-    run grep 'def _saw' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_success
-}
-
-@test "acid-303.py: has _square function" {
-    run grep 'def _square' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_success
-}
-
-@test "acid-303.py: has _tanh_clip distortion" {
-    run grep 'def _tanh_clip' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_success
-}
-
-@test "acid-303.py: has _acid_note function" {
-    run grep 'def _acid_note' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_success
-}
-
-@test "acid-303.py: ResonantFilter processes samples" {
-    run python3 -c "
-import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
-from importlib.machinery import SourceFileLoader
-m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-f = m.ResonantFilter(1000.0, 0.7)
-out = f.process(1.0)
-assert isinstance(out, float), f'expected float, got {type(out)}'
-print('ok')
-"
-    assert_success
-    assert_output "ok"
-}
-
-@test "acid-303.py: Delay processes samples" {
-    run python3 -c "
-import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
-from importlib.machinery import SourceFileLoader
-m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-d = m.Delay(100.0, 0.3, 0.2)
-out = d.process(1.0)
-assert isinstance(out, float)
-print('ok')
-"
-    assert_success
-    assert_output "ok"
-}
-
-@test "acid-303.py: CombReverb processes samples" {
-    run python3 -c "
-import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
-from importlib.machinery import SourceFileLoader
-m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-r = m.CombReverb(0.4, 0.15)
-out = r.process(1.0)
-assert isinstance(out, float)
-print('ok')
-"
-    assert_success
-    assert_output "ok"
-}
-
-@test "acid-303.py: _saw generates values in -1..1 range" {
-    run python3 -c "
-import sys, math; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
-from importlib.machinery import SourceFileLoader
-m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-for i in range(100):
-    v = m._saw(i * 0.1)
-    assert -1.01 <= v <= 1.01, f'out of range: {v}'
-print('ok')
-"
-    assert_success
-    assert_output "ok"
-}
-
-@test "acid-303.py: _square generates values in {-1, 1}" {
-    run python3 -c "
-import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
-from importlib.machinery import SourceFileLoader
-m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-for i in range(100):
-    v = m._square(i * 0.1)
-    assert v in (-1.0, 1.0), f'unexpected: {v}'
-print('ok')
-"
-    assert_success
-    assert_output "ok"
-}
-
-@test "acid-303.py: _tanh_clip output stays bounded" {
-    run python3 -c "
-import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
-from importlib.machinery import SourceFileLoader
-m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-for x in [-10, -1, 0, 1, 10]:
-    v = m._tanh_clip(x, 2.0)
-    assert -1.0 <= v <= 1.0, f'out of range: {v}'
-print('ok')
-"
-    assert_success
-    assert_output "ok"
-}
 
 # ═════════════════════════════════════════════════════════════���═════════════════
 # acid-303.py — Pattern Generation
@@ -1249,7 +1118,7 @@ print('ok')
 import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
 from importlib.machinery import SourceFileLoader
 m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-notes = [110.0, 130.8, 146.8, 164.8, 196.0]
+notes = [45, 48, 50, 52, 57]
 pat = m._generate_pattern(notes, steps=16)
 assert len(pat) == 16, f'expected 16 steps, got {len(pat)}'
 print('ok')
@@ -1263,7 +1132,7 @@ print('ok')
 import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
 from importlib.machinery import SourceFileLoader
 m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-notes = [110.0, 130.8, 146.8]
+notes = [45, 48, 50]
 pat = m._generate_pattern(notes)
 for step in pat:
     assert 'type' in step, f'missing type field'
@@ -1274,12 +1143,12 @@ print('ok')
     assert_output "ok"
 }
 
-@test "acid-303.py: note steps have accent and slide fields" {
+@test "acid-303.py: note steps have accent slide and midi fields" {
     run python3 -c "
 import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
 from importlib.machinery import SourceFileLoader
 m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-notes = [110.0, 130.8, 146.8, 164.8, 196.0]
+notes = [45, 48, 50, 52, 57]
 # Run multiple times to ensure we get note steps
 for _ in range(10):
     pat = m._generate_pattern(notes)
@@ -1287,7 +1156,7 @@ for _ in range(10):
         if step['type'] == 'note':
             assert 'accent' in step
             assert 'slide' in step
-            assert 'freq' in step
+            assert 'midi' in step
             print('ok')
             exit()
 print('ok')
@@ -1301,7 +1170,7 @@ print('ok')
 # ══════════════════════════���═════════════════════════════════���══════════════════
 
 @test "acid-303.py: has 8 stab generator functions" {
-    run grep 'def _generate_stab_' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    run grep 'def _stab_' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
     assert_success
     local count
     count=$(echo "$output" | wc -l | tr -d ' ')
@@ -1311,25 +1180,27 @@ print('ok')
 @test "acid-303.py: STAB_GENERATORS list has 8 entries" {
     run grep -A12 'STAB_GENERATORS' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
     assert_success
-    assert_output --partial "_generate_stab_filter_sweep"
-    assert_output --partial "_generate_stab_tritone"
-    assert_output --partial "_generate_stab_arp"
-    assert_output --partial "_generate_stab_chromatic"
-    assert_output --partial "_generate_stab_dub_chord"
-    assert_output --partial "_generate_stab_tape_echo"
-    assert_output --partial "_generate_stab_granular"
-    assert_output --partial "_generate_stab_metallic"
+    assert_output --partial "_stab_filter_sweep"
+    assert_output --partial "_stab_tritone"
+    assert_output --partial "_stab_arp"
+    assert_output --partial "_stab_chromatic"
+    assert_output --partial "_stab_dub_chord"
+    assert_output --partial "_stab_tape_echo"
+    assert_output --partial "_stab_granular"
+    assert_output --partial "_stab_metallic"
 }
 
-@test "acid-303.py: stab generators produce non-empty samples" {
+@test "acid-303.py: stab generators write MIDI notes" {
     run python3 -c "
 import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
 from importlib.machinery import SourceFileLoader
 m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-notes = [110.0, 130.8, 146.8, 164.8, 196.0]
+from midiutil import MIDIFile
+notes = [45, 48, 50, 52, 57]
 for gen in m.STAB_GENERATORS:
-    samples = gen(notes, bpm=140)
-    assert len(samples) > 0, f'{gen.__name__} produced empty samples'
+    midi = MIDIFile(1, deinterleave=False)
+    midi.addTempo(0, 0, 140)
+    gen(midi, 0, 0, notes, 140)
 print('ok')
 "
     assert_success
@@ -1340,177 +1211,28 @@ print('ok')
 # acid-303.py — FX Chain
 # ═══════════════════════════════���═════════════════════════��═════════════════════
 
-@test "acid-303.py: has _apply_distortion function" {
-    run grep 'def _apply_distortion' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_success
-}
-
-@test "acid-303.py: has _apply_delay function" {
-    run grep 'def _apply_delay' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_success
-}
-
-@test "acid-303.py: has _apply_reverb function" {
-    run grep 'def _apply_reverb' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_success
-}
-
-@test "acid-303.py: has Chorus class" {
-    run grep 'class Chorus' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_success
-}
-
-@test "acid-303.py: has AllpassDiffuser class" {
-    run grep 'class AllpassDiffuser' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_success
-}
-
-@test "acid-303.py: has _bitcrush function" {
-    run grep 'def _bitcrush' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_success
-}
-
-@test "acid-303.py: Chorus processes samples" {
-    run python3 -c "
-import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
-from importlib.machinery import SourceFileLoader
-m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-c = m.Chorus(rate=0.5, depth_ms=5.0, mix=0.4)
-out = [c.process(0.5) for _ in range(100)]
-assert len(out) == 100
-print('ok')
-"
-    assert_success
-    assert_output "ok"
-}
-
-@test "acid-303.py: AllpassDiffuser processes samples" {
-    run python3 -c "
-import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
-from importlib.machinery import SourceFileLoader
-m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-d = m.AllpassDiffuser(decay=0.6, mix=0.35)
-out = [d.process(0.5) for _ in range(100)]
-assert len(out) == 100
-print('ok')
-"
-    assert_success
-    assert_output "ok"
-}
-
-@test "acid-303.py: _bitcrush output stays bounded" {
-    run python3 -c "
-import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
-from importlib.machinery import SourceFileLoader
-m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-samples = [0.5, -0.3, 0.9, -0.7, 0.0]
-out = m._bitcrush(samples, bits=6, downsample=2)
-assert len(out) == len(samples)
-assert all(-1.0 <= s <= 1.0 for s in out)
-print('ok')
-"
-    assert_success
-    assert_output "ok"
-}
-
-@test "acid-303.py: FX chain preserves sample count" {
-    run python3 -c "
-import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
-from importlib.machinery import SourceFileLoader
-m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-samples = [0.5] * 1000
-d = m._apply_distortion(samples, 2.0)
-assert len(d) == 1000
-dl = m._apply_delay(samples, 100.0, 0.3, 0.2)
-assert len(dl) == 1000
-rv = m._apply_reverb(samples, 0.4, 0.15)
-assert len(rv) == 1000
-print('ok')
-"
-    assert_success
-    assert_output "ok"
-}
 
 # ══════════════���════════════════════════════════════════════════════════════════
 # acid-303.py — WAV Writing
 # ���══════════════════════════��═══════════════════════════════════════════════════
 
-@test "acid-303.py: _write_wav creates valid file" {
-    run python3 -c "
-import sys, os, tempfile; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
-from importlib.machinery import SourceFileLoader
-m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-d = tempfile.mkdtemp()
-path = os.path.join(d, 'test.wav')
-m._write_wav(path, [0.0, 0.5, -0.5, 1.0, -1.0])
-assert os.path.exists(path)
-assert os.path.getsize(path) > 0
-import shutil; shutil.rmtree(d)
-print('ok')
-"
-    assert_success
-    assert_output "ok"
-}
-
-@test "acid-303.py: _write_wav handles empty samples" {
-    run python3 -c "
-import sys, os, tempfile; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
-from importlib.machinery import SourceFileLoader
-m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-d = tempfile.mkdtemp()
-path = os.path.join(d, 'empty.wav')
-m._write_wav(path, [])
-assert os.path.exists(path)
-import shutil; shutil.rmtree(d)
-print('ok')
-"
-    assert_success
-    assert_output "ok"
-}
-
-@test "acid-303.py: _write_wav normalizes amplitude" {
-    run grep 'Normalize\|peak\|scale' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_success
-}
 
 # ════════��══════════════════════════════════════════════════════════════���═══════
 # acid-303.py — Bassline Generation
 # ════��═══════════════════���═════════════════════════════���════════════════════════
 
-@test "acid-303.py: _generate_bassline produces non-empty samples" {
+@test "acid-303.py: _write_bassline writes MIDI notes" {
     run python3 -c "
 import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
 from importlib.machinery import SourceFileLoader
 m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-notes = [110.0, 130.8, 146.8, 164.8, 196.0]
-samples = m._generate_bassline(notes, bpm=140, target_duration=3)
-assert len(samples) > 0
-print('ok')
-"
-    assert_success
-    assert_output "ok"
-}
-
-@test "acid-303.py: _acid_note produces samples" {
-    run python3 -c "
-import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
-from importlib.machinery import SourceFileLoader
-m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-samples = m._acid_note(220.0, 0.1, accent=True, slide_from=200.0)
-assert len(samples) > 0
-print('ok')
-"
-    assert_success
-    assert_output "ok"
-}
-
-@test "acid-303.py: _acid_note without slide" {
-    run python3 -c "
-import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
-from importlib.machinery import SourceFileLoader
-m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-samples = m._acid_note(220.0, 0.1, accent=False, slide_from=None)
-assert len(samples) > 0
+from midiutil import MIDIFile
+midi = MIDIFile(1, deinterleave=False)
+midi.addTempo(0, 0, 140)
+midi.addProgramChange(0, 0, 0, 38)
+notes = [45, 48, 50, 52, 57]
+beats = m._write_bassline(midi, 0, 0, notes, bpm=140, target_duration=3)
+assert beats > 0, f'expected positive beats, got {beats}'
 print('ok')
 "
     assert_success
@@ -1536,47 +1258,30 @@ print('ok')
     assert_output "ok"
 }
 
-@test "acid-303.py: generate() applies distortion and delay to bassline" {
+@test "acid-303.py: generate() sets MIDI program and CCs for bass" {
     run grep -A20 'def generate(' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_output --partial "_apply_distortion"
-    assert_output --partial "_apply_delay"
+    assert_output --partial "BASS_PROGRAM"
+    assert_output --partial "addControllerEvent"
 }
 
-@test "acid-303.py: generate() applies distortion and diffuser to stabs" {
-    run grep -A40 'def generate(' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_output --partial "_apply_distortion"
-    assert_output --partial "AllpassDiffuser"
-}
-
-@test "acid-303.py: generate() applies fade in/out to bassline" {
-    run grep -A20 'def generate(' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_output --partial "fade_len"
+@test "acid-303.py: generate() writes loop.mid and stab MIDIs" {
+    run grep -A30 'def generate(' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_output --partial "loop.mid"
+    assert_output --partial "stab-"
 }
 
 # ════════════════════════════════════���══════════════════════════════════════════
 # acid-303.py — MIDI to Freq
 # ══════��════════════════════════════════════════════════��═══════════════════════
 
-@test "acid-303.py: _midi_to_freq converts A4 to 440Hz" {
-    run python3 -c "
-import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
-from importlib.machinery import SourceFileLoader
-m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
-freq = m._midi_to_freq(69)
-assert abs(freq - 440.0) < 0.01, f'expected 440, got {freq}'
-print('ok')
-"
-    assert_success
-    assert_output "ok"
-}
 
 # ════════���═════════════════════════════════════════════════════════��════════════
 # Integration — Full Loop Architecture
 # ═══════���════════════════���════════════════════════════════════���═════════════════
 
-@test "integration: acid loop architecture — generate → beat file → play → double-buffer" {
+@test "integration: acid loop architecture — generate → beat file → play MIDI" {
     # Verify the loop structure in play_acid_loop
-    run grep -A70 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    run grep -A50 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
     # Creates temp dir
     assert_output --partial "mktemp -d"
     # Calls acid-303.py
@@ -1585,18 +1290,16 @@ print('ok')
     assert_output --partial "_acid_write_beat_file"
     # Writes dir file
     assert_output --partial "_ACID_DIR_FILE"
-    # Plays loop.wav
-    assert_output --partial "loop.wav"
-    # Double-buffers next
-    assert_output --partial "next_dir"
-    assert_output --partial "gen_pid"
+    # Plays loop.mid via MIDI
+    assert_output --partial "loop.mid"
+    assert_output --partial "_play_midi_blocking"
 }
 
 @test "integration: stab trigger reads beat file and stab dir" {
     run grep -A50 'play_acid_stab_synced()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial "_ACID_DIR_FILE"
     assert_output --partial "_ACID_BEAT_FILE"
-    assert_output --partial "stab-*.wav"
+    assert_output --partial "stab-*.mid"
 }
 
 @test "integration: post-tool-use triggers acid start + stab" {
@@ -1693,25 +1396,10 @@ print('ok')
 # Double-Buffer Architecture
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@test "play-midi.sh: double-buffer waits for next generation" {
-    run grep -A65 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    assert_output --partial 'wait "$gen_pid"'
-}
-
-@test "play-midi.sh: double-buffer uses pre-generated next loop" {
-    run grep -A40 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    assert_output --partial "pre-generated"
-    assert_output --partial "next_dir"
-}
-
-@test "play-midi.sh: double-buffer cleans up on exit" {
-    run grep -A70 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    assert_output --partial "Cleanup on exit"
-}
-
-@test "play-midi.sh: double-buffer keeps prev_dir alive for stab reads" {
-    run grep -A60 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+@test "play-midi.sh: acid loop cleans up prev_dir" {
+    run grep -A50 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial "prev_dir"
+    assert_output --partial "Cleanup"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════

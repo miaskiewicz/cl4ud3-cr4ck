@@ -332,6 +332,28 @@ _acid_write_beat_file() {
 
 # Play generative acid 303 loop — GLOBAL singleton, double-buffered
 # Only one instance runs across all terminals. Stabs read global files.
+# Play a MIDI file in blocking mode (used by acid loop)
+_play_midi_blocking() {
+    local midi_file="$1"
+    [ ! -f "$midi_file" ] && return 1
+
+    if [ -n "$CL4UD3_MIDI_PLAYER" ]; then
+        if [[ "$CL4UD3_MIDI_PLAYER" == *fluidsynth* ]]; then
+            # shellcheck disable=SC2086
+            $CL4UD3_MIDI_PLAYER -ni "$CL4UD3_SOUNDFONT" "$midi_file" >/dev/null 2>&1
+        else
+            # shellcheck disable=SC2086
+            $CL4UD3_MIDI_PLAYER "$midi_file" >/dev/null 2>&1
+        fi
+    elif command -v fluidsynth >/dev/null 2>&1 && [ -n "$CL4UD3_SOUNDFONT" ]; then
+        fluidsynth -ni "$CL4UD3_SOUNDFONT" "$midi_file" >/dev/null 2>&1
+    elif command -v timidity >/dev/null 2>&1; then
+        timidity "$midi_file" >/dev/null 2>&1
+    elif [ -x "$CL4UD3_HOME/bin/playmidi" ]; then
+        "$CL4UD3_HOME/bin/playmidi" "$midi_file" >/dev/null 2>&1
+    fi
+}
+
 play_acid_loop() {
     local bpm="${1:-140}"
 
@@ -342,63 +364,43 @@ play_acid_loop() {
         if [ -n "$existing_pid" ] && kill -0 "$existing_pid" 2>/dev/null; then
             return 0
         fi
-        # Stale PID file — clean up
         rm -f "$_PF_ACID"
     fi
 
-    # Mark activity on start
     _acid_touch_activity
 
     local my_pidfile="$_PF_ACID"
     (
-        local next_dir="" prev_dir=""
+        local prev_dir=""
 
         while [ -f "$my_pidfile" ]; do
-            # Auto-kill if no tool use for _ACID_IDLE_TIMEOUT seconds
             if _acid_is_idle; then
                 break
             fi
 
+            # Generate MIDI — instant, no double-buffering needed
             local dir
-
-            # Use pre-generated next loop if available (double-buffer)
-            if [ -n "$next_dir" ] && [ -d "$next_dir" ] && [ -f "$next_dir/loop.wav" ]; then
-                dir="$next_dir"
-                next_dir=""
-            else
-                # First iteration or pre-gen failed — generate now
-                dir=$(mktemp -d /tmp/.cl4ud3-acid-XXXXX)
-                python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$dir" >/dev/null 2>&1 || {
-                    rm -rf "$dir"; continue
-                }
-            fi
+            dir=$(mktemp -d /tmp/.cl4ud3-acid-XXXXX)
+            python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$dir" >/dev/null 2>&1 || {
+                rm -rf "$dir"; continue
+            }
 
             # Publish beat + stab dir for all terminals
             _acid_write_beat_file "$bpm"
             echo "$dir" > "$_ACID_DIR_FILE"
 
-            # Start generating NEXT loop in background while current plays
-            next_dir=$(mktemp -d /tmp/.cl4ud3-acid-XXXXX)
-            python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$next_dir" >/dev/null 2>&1 &
-            local gen_pid=$!
-
-            # Play current loop.wav blocking (zero gap — next already generating)
-            if [ -n "$WAV_PLAYER" ] && [ -f "$dir/loop.wav" ]; then
-                # shellcheck disable=SC2086
-                $WAV_PLAYER "$dir/loop.wav" >/dev/null 2>&1
+            # Play loop.mid blocking
+            if [ -f "$dir/loop.mid" ]; then
+                _play_midi_blocking "$dir/loop.mid"
             fi
 
-            # Wait for next generation to finish
-            wait "$gen_pid" 2>/dev/null || { rm -rf "$next_dir"; next_dir=""; }
-
-            # Cleanup previous dir (keep current stab dir alive until next swap)
+            # Cleanup previous dir
             [ -n "$prev_dir" ] && rm -rf "$prev_dir"
             prev_dir="$dir"
         done
 
-        # Cleanup on exit (idle timeout or pidfile removed)
+        # Cleanup on exit
         [ -n "$prev_dir" ] && rm -rf "$prev_dir"
-        [ -n "$next_dir" ] && rm -rf "$next_dir"
         rm -f "$my_pidfile" "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE" "$_ACID_ACTIVITY_FILE"
     ) &
     local loop_pid=$!
@@ -450,12 +452,12 @@ _ensure_stab_set() {
     if [ -f "$_ACID_DIR_FILE" ]; then
         local gdir
         gdir=$(cat "$_ACID_DIR_FILE" 2>/dev/null)
-        if [ -d "$gdir" ] && ls "$gdir"/stab-*.wav >/dev/null 2>&1; then
+        if [ -d "$gdir" ] && ls "$gdir"/stab-*.mid >/dev/null 2>&1; then
             return 0
         fi
     fi
     # Generate standalone stab set for this session
-    if [ ! -d "$_ACID_STAB_DIR" ] || ! ls "$_ACID_STAB_DIR"/stab-*.wav >/dev/null 2>&1; then
+    if [ ! -d "$_ACID_STAB_DIR" ] || ! ls "$_ACID_STAB_DIR"/stab-*.mid >/dev/null 2>&1; then
         mkdir -p "$_ACID_STAB_DIR"
         python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$_ACID_STAB_DIR" --duration 3 >/dev/null 2>&1 || return 1
     fi
@@ -475,7 +477,7 @@ play_acid_stab_synced() {
         stab_dir=$(cat "$_ACID_DIR_FILE" 2>/dev/null)
         [ -d "$stab_dir" ] || stab_dir=""
     fi
-    if [ -z "$stab_dir" ] || ! ls "$stab_dir"/stab-*.wav >/dev/null 2>&1; then
+    if [ -z "$stab_dir" ] || ! ls "$stab_dir"/stab-*.mid >/dev/null 2>&1; then
         # No 303 running — use/generate per-session stabs
         _ensure_stab_set "$bpm" || return 0
         stab_dir="$_ACID_STAB_DIR"
@@ -483,7 +485,7 @@ play_acid_stab_synced() {
 
     # Pick random stab
     local stab
-    stab=$(find "$stab_dir" -maxdepth 1 -name 'stab-*.wav' 2>/dev/null | sort -R | head -1)
+    stab=$(find "$stab_dir" -maxdepth 1 -name 'stab-*.mid' 2>/dev/null | sort -R | head -1)
     [ -n "$stab" ] && [ -f "$stab" ] || return 0
 
     # Beat-sync if beat file exists (303 running), else play immediately
@@ -515,10 +517,7 @@ play_acid_stab_synced() {
 
             (
                 sleep "$wait_time" 2>/dev/null || true
-                if [ -n "$WAV_PLAYER" ] && [ -f "$stab" ]; then
-                    # shellcheck disable=SC2086
-                    $WAV_PLAYER "$stab" >/dev/null 2>&1
-                fi
+                [ -f "$stab" ] && play_midi "$stab"
             ) &
             disown $! 2>/dev/null || true
             return 0
@@ -526,13 +525,7 @@ play_acid_stab_synced() {
     fi
 
     # No beat file — play immediately in background
-    if [ -n "$WAV_PLAYER" ] && [ -f "$stab" ]; then
-        (
-            # shellcheck disable=SC2086
-            $WAV_PLAYER "$stab" >/dev/null 2>&1
-        ) &
-        disown $! 2>/dev/null || true
-    fi
+    [ -f "$stab" ] && play_midi "$stab"
 }
 
 # Play a WAV file in blocking mode (used by acid loop)
