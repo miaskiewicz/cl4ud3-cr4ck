@@ -5,7 +5,7 @@
 # Toggle via: /cr4ck acid
 
 # ── Hidden acid config ───────────────────────────────────────────────────────
-_ACID_303_ENABLED="${_ACID_303_ENABLED:-true}"
+_ACID_303_ENABLED="${_ACID_303_ENABLED:-false}"
 _ACID_STABS_ENABLED="${_ACID_STABS_ENABLED:-true}"
 _ACID_303_BPM="${_ACID_303_BPM:-140}"
 _ACID_STAB_CHANCE="${_ACID_STAB_CHANCE:-0.4}"

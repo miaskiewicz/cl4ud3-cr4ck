@@ -120,8 +120,8 @@ teardown() {
 # acid-mode.sh — Hidden Config Defaults
 # ═════��═══════════════════════��══════════════════════════════���══════════════════
 
-@test "acid-mode.sh: _ACID_303_ENABLED defaults to true" {
-    run grep '_ACID_303_ENABLED.*:-true' "$CL4UD3_HOME/hooks/acid-mode.sh"
+@test "acid-mode.sh: _ACID_303_ENABLED defaults to false" {
+    run grep '_ACID_303_ENABLED.*:-false' "$CL4UD3_HOME/hooks/acid-mode.sh"
     assert_success
 }
 
