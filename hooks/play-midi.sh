@@ -28,7 +28,25 @@ _PF_LOADING="/tmp/.cl4ud3-cr4ck-loading-pid-$CL4UD3_SID"
 _PF_ACID="/tmp/.cl4ud3-cr4ck-acid-pid"
 _ACID_BEAT_FILE="/tmp/.cl4ud3-cr4ck-acid-beat"
 _ACID_DIR_FILE="/tmp/.cl4ud3-cr4ck-acid-dir"
+_ACID_ACTIVITY_FILE="/tmp/.cl4ud3-cr4ck-acid-activity"
 _ACID_STAB_DIR="/tmp/.cl4ud3-cr4ck-acid-stabs-$CL4UD3_SID"
+
+# Touch activity file — called from hooks to signal tool use
+_acid_touch_activity() {
+    touch "$_ACID_ACTIVITY_FILE"
+}
+
+# Check if idle too long — returns 0 if timed out
+_acid_is_idle() {
+    local timeout="${_ACID_IDLE_TIMEOUT:-30}"
+    [ -f "$_ACID_ACTIVITY_FILE" ] || return 0
+    local last now diff
+    last=$(stat -f %m "$_ACID_ACTIVITY_FILE" 2>/dev/null || stat -c %Y "$_ACID_ACTIVITY_FILE" 2>/dev/null || echo 0)
+    now=$(date +%s)
+    diff=$((now - last))
+    [ "$diff" -ge "$timeout" ] && return 0
+    return 1
+}
 
 # Clean stale PID files for this session (dead processes)
 cleanup_session_files() {
@@ -328,11 +346,19 @@ play_acid_loop() {
         rm -f "$_PF_ACID"
     fi
 
+    # Mark activity on start
+    _acid_touch_activity
+
     local my_pidfile="$_PF_ACID"
     (
         local next_dir="" prev_dir=""
 
         while [ -f "$my_pidfile" ]; do
+            # Auto-kill if no tool use for _ACID_IDLE_TIMEOUT seconds
+            if _acid_is_idle; then
+                break
+            fi
+
             local dir
 
             # Use pre-generated next loop if available (double-buffer)
@@ -370,9 +396,10 @@ play_acid_loop() {
             prev_dir="$dir"
         done
 
-        # Cleanup on exit
+        # Cleanup on exit (idle timeout or pidfile removed)
         [ -n "$prev_dir" ] && rm -rf "$prev_dir"
         [ -n "$next_dir" ] && rm -rf "$next_dir"
+        rm -f "$my_pidfile" "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE" "$_ACID_ACTIVITY_FILE"
     ) &
     local loop_pid=$!
     if [ -n "$loop_pid" ]; then
@@ -392,7 +419,7 @@ kill_acid_loop() {
         fi
         rm -f "$_PF_ACID"
     fi
-    rm -f "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE"
+    rm -f "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE" "$_ACID_ACTIVITY_FILE"
     # Cleanup any orphaned acid temp dirs
     rm -rf /tmp/.cl4ud3-acid-* 2>/dev/null || true
     return 0

@@ -200,3 +200,18 @@ teardown() {
     run bash "$CL4UD3_HOME/hooks/post-tool-use.sh"
     assert_success
 }
+
+@test "stop.sh: uses configurable cooldown" {
+    run grep 'CL4UD3_STOP_COOLDOWN' "$CL4UD3_HOME/hooks/stop.sh"
+    assert_success
+}
+
+@test "pre-tool-use.sh: uses configurable cooldown" {
+    run grep 'CL4UD3_TOOL_COOLDOWN' "$CL4UD3_HOME/hooks/pre-tool-use.sh"
+    assert_success
+}
+
+@test "post-tool-use.sh: uses configurable cooldown" {
+    run grep 'CL4UD3_TOOL_COOLDOWN' "$CL4UD3_HOME/hooks/post-tool-use.sh"
+    assert_success
+}

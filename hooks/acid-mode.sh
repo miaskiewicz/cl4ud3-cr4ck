@@ -8,8 +8,9 @@
 _ACID_303_ENABLED="${_ACID_303_ENABLED:-false}"
 _ACID_STABS_ENABLED="${_ACID_STABS_ENABLED:-true}"
 _ACID_303_BPM="${_ACID_303_BPM:-140}"
-_ACID_STAB_CHANCE="${_ACID_STAB_CHANCE:-0.4}"
-_ACID_STAB_RANDOM_CHANCE="${_ACID_STAB_RANDOM_CHANCE:-0.15}"
+_ACID_STAB_CHANCE="${_ACID_STAB_CHANCE:-0.8}"
+_ACID_STAB_RANDOM_CHANCE="${_ACID_STAB_RANDOM_CHANCE:-0.3}"
+_ACID_IDLE_TIMEOUT="${_ACID_IDLE_TIMEOUT:-30}"
 
 # Rainbow palette — full spectrum cycle
 _ACID_COLORS=(196 202 208 214 220 226 190 154 118 82 46 49 51 45 39 33 93 129 165 201)
@@ -139,6 +140,10 @@ _acid_start_loop() {
     [ "$_ACID_303_ENABLED" = "true" ] || return 0
     # Only start if play-midi.sh is sourced (has play_acid_loop)
     type play_acid_loop >/dev/null 2>&1 || return 0
+
+    # Signal activity for idle timeout
+    type _acid_touch_activity >/dev/null 2>&1 && _acid_touch_activity
+
     # Already running?
     [ -f "$_PF_ACID" ] && kill -0 "$(cat "$_PF_ACID" 2>/dev/null)" 2>/dev/null && return 0
     play_acid_loop "$_ACID_303_BPM"
@@ -150,6 +155,9 @@ _acid_maybe_stab() {
     _is_acid_active || return 0
     [ "$_ACID_STABS_ENABLED" = "true" ] || return 0
     type play_acid_stab_synced >/dev/null 2>&1 || return 0
+
+    # Signal activity for idle timeout
+    type _acid_touch_activity >/dev/null 2>&1 && _acid_touch_activity
 
     # Ensure beat clock + stab set exist (even without 303)
     type _ensure_beat_clock >/dev/null 2>&1 && _ensure_beat_clock "$_ACID_303_BPM"

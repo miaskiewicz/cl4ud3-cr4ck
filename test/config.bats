@@ -158,3 +158,21 @@ teardown() {
     source "$CL4UD3_HOME/config.sh"
     [[ "$CL4UD3_SOUNDFONT" == *"GeneralUser-GS.sf2" ]]
 }
+
+@test "config: stop cooldown defaults to 3" {
+    source "$CL4UD3_HOME/config.sh"
+    [ "$CL4UD3_STOP_COOLDOWN" = "3" ]
+}
+
+@test "config: tool cooldown defaults to 10" {
+    source "$CL4UD3_HOME/config.sh"
+    [ "$CL4UD3_TOOL_COOLDOWN" = "10" ]
+}
+
+@test "config: cooldown env override works" {
+    export CL4UD3_STOP_COOLDOWN=1
+    export CL4UD3_TOOL_COOLDOWN=5
+    source "$CL4UD3_HOME/config.sh"
+    [ "$CL4UD3_STOP_COOLDOWN" = "1" ]
+    [ "$CL4UD3_TOOL_COOLDOWN" = "5" ]
+}

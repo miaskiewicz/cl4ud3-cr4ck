@@ -135,13 +135,18 @@ teardown() {
     assert_success
 }
 
-@test "acid-mode.sh: _ACID_STAB_CHANCE defaults to 0.4" {
-    run grep '_ACID_STAB_CHANCE.*:-0.4' "$CL4UD3_HOME/hooks/acid-mode.sh"
+@test "acid-mode.sh: _ACID_STAB_CHANCE defaults to 0.8" {
+    run grep '_ACID_STAB_CHANCE.*:-0.8' "$CL4UD3_HOME/hooks/acid-mode.sh"
     assert_success
 }
 
-@test "acid-mode.sh: _ACID_STAB_RANDOM_CHANCE defaults to 0.15" {
-    run grep '_ACID_STAB_RANDOM_CHANCE.*:-0.15' "$CL4UD3_HOME/hooks/acid-mode.sh"
+@test "acid-mode.sh: _ACID_STAB_RANDOM_CHANCE defaults to 0.3" {
+    run grep '_ACID_STAB_RANDOM_CHANCE.*:-0.3' "$CL4UD3_HOME/hooks/acid-mode.sh"
+    assert_success
+}
+
+@test "acid-mode.sh: _ACID_IDLE_TIMEOUT defaults to 30" {
+    run grep '_ACID_IDLE_TIMEOUT.*:-30' "$CL4UD3_HOME/hooks/acid-mode.sh"
     assert_success
 }
 
@@ -150,8 +155,9 @@ teardown() {
     [ "$_ACID_303_ENABLED" = "false" ]
     [ "$_ACID_STABS_ENABLED" = "true" ]
     [ "$_ACID_303_BPM" = "140" ]
-    [ "$_ACID_STAB_CHANCE" = "0.4" ]
-    [ "$_ACID_STAB_RANDOM_CHANCE" = "0.15" ]
+    [ "$_ACID_STAB_CHANCE" = "0.8" ]
+    [ "$_ACID_STAB_RANDOM_CHANCE" = "0.3" ]
+    [ "$_ACID_IDLE_TIMEOUT" = "30" ]
 }
 
 @test "acid-mode.sh: config vars respect env overrides" {
@@ -606,7 +612,7 @@ teardown() {
 }
 
 @test "play-midi.sh: play_acid_loop disowns background process" {
-    run grep -A70 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    run grep -A80 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial "disown"
 }
 
@@ -963,7 +969,7 @@ teardown() {
     rm -rf "$dir"
 }
 
-@test "acid-303.py: generates 4 stab WAVs" {
+@test "acid-303.py: generates 8 stab WAVs" {
     local dir
     dir=$(mktemp -d /tmp/.cl4ud3-acid-test-XXXXX)
     run python3 "$BATS_TEST_DIRNAME/../tools/acid-303.py" --bpm 140 --output-dir "$dir" --duration 3
@@ -972,6 +978,10 @@ teardown() {
     [ -f "$dir/stab-02.wav" ]
     [ -f "$dir/stab-03.wav" ]
     [ -f "$dir/stab-04.wav" ]
+    [ -f "$dir/stab-05.wav" ]
+    [ -f "$dir/stab-06.wav" ]
+    [ -f "$dir/stab-07.wav" ]
+    [ -f "$dir/stab-08.wav" ]
     rm -rf "$dir"
 }
 
@@ -1014,7 +1024,7 @@ teardown() {
     local dir
     dir=$(mktemp -d /tmp/.cl4ud3-acid-test-XXXXX)
     python3 "$BATS_TEST_DIRNAME/../tools/acid-303.py" --bpm 140 --output-dir "$dir" --duration 3
-    for i in 01 02 03 04; do
+    for i in 01 02 03 04 05 06 07 08; do
         local header
         header=$(head -c 4 "$dir/stab-$i.wav")
         [ "$header" = "RIFF" ]
@@ -1290,21 +1300,25 @@ print('ok')
 # acid-303.py — Stab Generation
 # ══════════════════════════���═════════════════════════════════���══════════════════
 
-@test "acid-303.py: has 4 stab generator functions" {
+@test "acid-303.py: has 8 stab generator functions" {
     run grep 'def _generate_stab_' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
     assert_success
     local count
     count=$(echo "$output" | wc -l | tr -d ' ')
-    [ "$count" -eq 4 ]
+    [ "$count" -eq 8 ]
 }
 
-@test "acid-303.py: STAB_GENERATORS list has 4 entries" {
-    run grep -A6 'STAB_GENERATORS' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+@test "acid-303.py: STAB_GENERATORS list has 8 entries" {
+    run grep -A12 'STAB_GENERATORS' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
     assert_success
     assert_output --partial "_generate_stab_filter_sweep"
     assert_output --partial "_generate_stab_tritone"
     assert_output --partial "_generate_stab_arp"
     assert_output --partial "_generate_stab_chromatic"
+    assert_output --partial "_generate_stab_dub_chord"
+    assert_output --partial "_generate_stab_tape_echo"
+    assert_output --partial "_generate_stab_granular"
+    assert_output --partial "_generate_stab_metallic"
 }
 
 @test "acid-303.py: stab generators produce non-empty samples" {
@@ -1339,6 +1353,64 @@ print('ok')
 @test "acid-303.py: has _apply_reverb function" {
     run grep 'def _apply_reverb' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
     assert_success
+}
+
+@test "acid-303.py: has Chorus class" {
+    run grep 'class Chorus' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_success
+}
+
+@test "acid-303.py: has AllpassDiffuser class" {
+    run grep 'class AllpassDiffuser' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_success
+}
+
+@test "acid-303.py: has _bitcrush function" {
+    run grep 'def _bitcrush' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_success
+}
+
+@test "acid-303.py: Chorus processes samples" {
+    run python3 -c "
+import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
+from importlib.machinery import SourceFileLoader
+m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
+c = m.Chorus(rate=0.5, depth_ms=5.0, mix=0.4)
+out = [c.process(0.5) for _ in range(100)]
+assert len(out) == 100
+print('ok')
+"
+    assert_success
+    assert_output "ok"
+}
+
+@test "acid-303.py: AllpassDiffuser processes samples" {
+    run python3 -c "
+import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
+from importlib.machinery import SourceFileLoader
+m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
+d = m.AllpassDiffuser(decay=0.6, mix=0.35)
+out = [d.process(0.5) for _ in range(100)]
+assert len(out) == 100
+print('ok')
+"
+    assert_success
+    assert_output "ok"
+}
+
+@test "acid-303.py: _bitcrush output stays bounded" {
+    run python3 -c "
+import sys; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
+from importlib.machinery import SourceFileLoader
+m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
+samples = [0.5, -0.3, 0.9, -0.7, 0.0]
+out = m._bitcrush(samples, bits=6, downsample=2)
+assert len(out) == len(samples)
+assert all(-1.0 <= s <= 1.0 for s in out)
+print('ok')
+"
+    assert_success
+    assert_output "ok"
 }
 
 @test "acid-303.py: FX chain preserves sample count" {
@@ -1470,9 +1542,10 @@ print('ok')
     assert_output --partial "_apply_delay"
 }
 
-@test "acid-303.py: generate() applies delay and reverb to stabs" {
-    run grep -A30 'def generate(' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_output --partial "_apply_reverb"
+@test "acid-303.py: generate() applies distortion and diffuser to stabs" {
+    run grep -A40 'def generate(' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_output --partial "_apply_distortion"
+    assert_output --partial "AllpassDiffuser"
 }
 
 @test "acid-303.py: generate() applies fade in/out to bassline" {
@@ -1678,6 +1751,71 @@ print('ok')
     assert_success
     [ -f "$_ACID_BEAT_FILE" ]
     rm -f "$_ACID_BEAT_FILE"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Idle Timeout — Auto-kill 303 when no tool use
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "play-midi.sh: defines _acid_touch_activity function" {
+    run grep '_acid_touch_activity()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_success
+}
+
+@test "play-midi.sh: defines _acid_is_idle function" {
+    run grep '_acid_is_idle()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_success
+}
+
+@test "play-midi.sh: defines _ACID_ACTIVITY_FILE" {
+    run grep '_ACID_ACTIVITY_FILE' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_success
+}
+
+@test "play-midi.sh: _acid_touch_activity creates file" {
+    source "$CL4UD3_HOME/hooks/play-midi.sh"
+    rm -f "$_ACID_ACTIVITY_FILE"
+    _acid_touch_activity
+    [ -f "$_ACID_ACTIVITY_FILE" ]
+    rm -f "$_ACID_ACTIVITY_FILE"
+}
+
+@test "play-midi.sh: _acid_is_idle returns 0 when no activity file" {
+    source "$CL4UD3_HOME/hooks/play-midi.sh"
+    rm -f "$_ACID_ACTIVITY_FILE"
+    _acid_is_idle
+}
+
+@test "play-midi.sh: _acid_is_idle returns 1 when recently active" {
+    source "$CL4UD3_HOME/hooks/play-midi.sh"
+    _acid_touch_activity
+    ! _acid_is_idle
+    rm -f "$_ACID_ACTIVITY_FILE"
+}
+
+@test "play-midi.sh: acid loop checks _acid_is_idle" {
+    run grep -A15 'while \[ -f "$my_pidfile" \]' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "_acid_is_idle"
+}
+
+@test "play-midi.sh: acid loop cleans up on idle exit" {
+    run grep -A5 'Cleanup on exit' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "_ACID_ACTIVITY_FILE"
+}
+
+@test "play-midi.sh: kill_acid_loop cleans activity file" {
+    run grep -A10 'kill_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "_ACID_ACTIVITY_FILE"
+}
+
+@test "acid-mode.sh: _acid_start_loop touches activity" {
+    run grep -A10 '_acid_start_loop()' "$CL4UD3_HOME/hooks/acid-mode.sh"
+    assert_output --partial "_acid_touch_activity"
+}
+
+@test "acid-mode.sh: _acid_maybe_stab touches activity" {
+    run grep -A10 '_acid_maybe_stab()' "$CL4UD3_HOME/hooks/acid-mode.sh"
+    assert_output --partial "_acid_touch_activity"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -39,7 +39,7 @@ if [ -f "$LOCKFILE" ]; then
     LAST=$(stat -f %m "$LOCKFILE" 2>/dev/null || stat -c %Y "$LOCKFILE" 2>/dev/null || echo 0)
     NOW=$(date +%s)
     DIFF=$((NOW - LAST))
-    if [ "$DIFF" -lt 3 ]; then
+    if [ "$DIFF" -lt "${CL4UD3_STOP_COOLDOWN:-3}" ]; then
         # 🍄 acid bypasses sound cooldown
         if [ -f "$CL4UD3_HOME/hooks/acid-mode.sh" ]; then
             source "$CL4UD3_HOME/hooks/acid-mode.sh"

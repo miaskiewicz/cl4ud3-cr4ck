@@ -19,7 +19,7 @@ if [ -f "$LOCKFILE" ]; then
     LAST=$(stat -f %m "$LOCKFILE" 2>/dev/null || stat -c %Y "$LOCKFILE" 2>/dev/null || echo 0)
     NOW=$(date +%s)
     DIFF=$((NOW - LAST))
-    [ "$DIFF" -lt 10 ] && exit 0
+    [ "$DIFF" -lt "${CL4UD3_TOOL_COOLDOWN:-10}" ] && exit 0
 fi
 touch "$LOCKFILE"
 

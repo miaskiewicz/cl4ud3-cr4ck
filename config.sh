@@ -46,6 +46,10 @@ CL4UD3_ANIM_RAINBOW="${CL4UD3_ANIM_RAINBOW:-true}"       # color cycle shift
 CL4UD3_ANIM_MATRIX="${CL4UD3_ANIM_MATRIX:-true}"         # matrix rain then reveal
 CL4UD3_ANIM_GLITCH="${CL4UD3_ANIM_GLITCH:-true}"         # scrambled→clean reveal
 
+# Cooldowns — minimum seconds between sounds (prevents spam)
+CL4UD3_STOP_COOLDOWN="${CL4UD3_STOP_COOLDOWN:-3}"       # between glitch sounds on stop
+CL4UD3_TOOL_COOLDOWN="${CL4UD3_TOOL_COOLDOWN:-10}"      # between modem sounds on tool use
+
 # Secret mode — shhh
 CL4UD3_ACID_MODE="${CL4UD3_ACID_MODE:-false}"
 
