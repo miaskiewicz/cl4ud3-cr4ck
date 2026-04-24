@@ -29,7 +29,6 @@
 All sounds generated programmatically — MIDI via `midiutil`, raw WAV via Python stdlib. No sample packs, no downloads, pure math.
 
 <img width="378" height="218" alt="Screenshot 2026-04-23 at 19 09 13" src="https://github.com/user-attachments/assets/8b76724f-2c1f-4090-835f-12eaee90e7e5" />
-<img width="470" height="244" alt="Screenshot 2026-04-23 at 20 51 06" src="https://github.com/user-attachments/assets/fe78da3a-f108-43bc-9f47-77a51c6f1cbe" />
 
 
 ## 1nst4ll
@@ -353,7 +352,7 @@ SCREENS+=("""
 - `\033[0m` = reset (always end with this)
 - `\033[1m` = bold
 
-39 screens included by default. Styles: gr0g classic, demoscene, cyberpunk, BBS, graffiti, rave/freetek, animals (dolphin, dog, cat), skull, glitch art, multilingual (Japanese, Russian, Thai, Chinese), psychedelic/acid.
+39 screens included by default. Styles: gr0g classic, demoscene, cyberpunk, BBS, graffiti, rave/freetek, animals, skull, glitch art, multilingual (Japanese, Russian, Thai, Chinese), psychedelic/acid.
 
 ### Adjusting Cooldowns
 

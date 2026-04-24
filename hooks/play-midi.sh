@@ -22,10 +22,11 @@ CL4UD3_SID="${CL4UD3_SID:-$PPID}"
 _PF_SOUND="/tmp/.cl4ud3-cr4ck-sound-pid-$CL4UD3_SID"
 _PF_MUSIC="/tmp/.cl4ud3-cr4ck-music-pid-$CL4UD3_SID"
 _PF_TIMER="/tmp/.cl4ud3-cr4ck-timer-pid-$CL4UD3_SID"
+_PF_LOADING="/tmp/.cl4ud3-cr4ck-loading-pid-$CL4UD3_SID"
 
 # Clean stale PID files for this session (dead processes)
 cleanup_session_files() {
-    for pf in "$_PF_SOUND" "$_PF_MUSIC" "$_PF_TIMER"; do
+    for pf in "$_PF_SOUND" "$_PF_MUSIC" "$_PF_TIMER" "$_PF_LOADING"; do
         if [ -f "$pf" ]; then
             local pid
             pid=$(cat "$pf" 2>/dev/null)
@@ -38,7 +39,7 @@ cleanup_session_files() {
 
 # Clean stale PID files from ALL sessions (dead processes)
 cleanup_all_stale_files() {
-    for pf in /tmp/.cl4ud3-cr4ck-sound-pid-* /tmp/.cl4ud3-cr4ck-music-pid-* /tmp/.cl4ud3-cr4ck-timer-pid-*; do
+    for pf in /tmp/.cl4ud3-cr4ck-sound-pid-* /tmp/.cl4ud3-cr4ck-music-pid-* /tmp/.cl4ud3-cr4ck-timer-pid-* /tmp/.cl4ud3-cr4ck-loading-pid-*; do
         [ -f "$pf" ] || continue
         local pid
         pid=$(cat "$pf" 2>/dev/null)
@@ -145,12 +146,10 @@ play_random_from_dir() {
 
     cleanup_session_files
 
-    # Track last-played per directory to avoid repeats
-    local dir_hash last_file hist_file
+    # Track play history per directory — cycle through all before repeating
+    local dir_hash hist_file
     dir_hash=$(echo "$dir" | md5sum 2>/dev/null | cut -c1-8 || echo "$dir" | md5 2>/dev/null | cut -c1-8 || echo "x")
     hist_file="/tmp/.cl4ud3-cr4ck-lastplay-${dir_hash}"
-    last_file=""
-    [ -f "$hist_file" ] && last_file=$(cat "$hist_file" 2>/dev/null)
 
     # Prefer WAV files, fall back to MIDI
     local file candidates
@@ -160,17 +159,31 @@ play_random_from_dir() {
     fi
     [ -z "$candidates" ] && return 1
 
-    # Filter out last-played file if more than one candidate
     local count
     count=$(echo "$candidates" | wc -l | tr -d ' ')
-    if [ "$count" -gt 1 ] && [ -n "$last_file" ]; then
-        file=$(echo "$candidates" | grep -v "^${last_file}$" | sort -R | head -1)
+
+    # Filter out all previously played files to cycle through entire pool
+    local remaining=""
+    if [ "$count" -gt 1 ] && [ -s "$hist_file" ]; then
+        remaining=$(echo "$candidates" | grep -v -F -x -f "$hist_file" || true)
+        # All played? Reset cycle — exclude only last played to avoid repeat
+        if [ -z "$remaining" ]; then
+            local last_played
+            last_played=$(tail -1 "$hist_file" 2>/dev/null)
+            rm -f "$hist_file"
+            if [ -n "$last_played" ]; then
+                remaining=$(echo "$candidates" | grep -v "^${last_played}$" || true)
+            fi
+            [ -z "$remaining" ] && remaining="$candidates"
+        fi
     else
-        file=$(echo "$candidates" | sort -R | head -1)
+        remaining="$candidates"
     fi
 
+    file=$(echo "$remaining" | sort -R | head -1)
+
     if [ -n "$file" ]; then
-        echo "$file" > "$hist_file"
+        echo "$file" >> "$hist_file"
         play_audio "$file"
     fi
 }
@@ -278,6 +291,6 @@ kill_all_sounds() {
     killall pw-play 2>/dev/null || true
     killall paplay 2>/dev/null || true
     killall aplay 2>/dev/null || true
-    rm -f /tmp/.cl4ud3-cr4ck-sound-pid-* /tmp/.cl4ud3-cr4ck-music-pid-* /tmp/.cl4ud3-cr4ck-timer-pid-*
+    rm -f /tmp/.cl4ud3-cr4ck-sound-pid-* /tmp/.cl4ud3-cr4ck-music-pid-* /tmp/.cl4ud3-cr4ck-timer-pid-* /tmp/.cl4ud3-cr4ck-loading-pid-*
     return 0
 }

@@ -22,6 +22,6 @@ _common_teardown() {
     # Clean test temp files
     rm -rf "$TEST_CL4UD3_HOME"
     rm -f /tmp/.cl4ud3-cr4ck-*-"test-$$-$BATS_TEST_NUMBER"
-    rm -f /tmp/.cl4ud3-cr4ck-sound-pid-test-* /tmp/.cl4ud3-cr4ck-music-pid-test-* /tmp/.cl4ud3-cr4ck-timer-pid-test-*
-    rm -f /tmp/.cl4ud3-cr4ck-sound-pid-fake* /tmp/.cl4ud3-cr4ck-music-pid-fake* /tmp/.cl4ud3-cr4ck-timer-pid-fake*
+    rm -f /tmp/.cl4ud3-cr4ck-sound-pid-test-* /tmp/.cl4ud3-cr4ck-music-pid-test-* /tmp/.cl4ud3-cr4ck-timer-pid-test-* /tmp/.cl4ud3-cr4ck-loading-pid-test-*
+    rm -f /tmp/.cl4ud3-cr4ck-sound-pid-fake* /tmp/.cl4ud3-cr4ck-music-pid-fake* /tmp/.cl4ud3-cr4ck-timer-pid-fake* /tmp/.cl4ud3-cr4ck-loading-pid-fake*
 }

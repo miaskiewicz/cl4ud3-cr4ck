@@ -147,6 +147,149 @@ _source_play_midi() {
     play_random_from_dir "$dir" || true
 }
 
+@test "play_random_from_dir: writes history file to track plays" {
+    _source_play_midi
+    play_audio() { :; }
+    local dir="$TEST_CL4UD3_HOME/sounds/modem-test"
+    mkdir -p "$dir"
+    touch "$dir/a.wav" "$dir/b.wav" "$dir/c.wav"
+    local dir_hash
+    dir_hash=$(echo "$dir" | md5sum 2>/dev/null | cut -c1-8 || echo "$dir" | md5 2>/dev/null | cut -c1-8)
+    local hist_file="/tmp/.cl4ud3-cr4ck-lastplay-${dir_hash}"
+    rm -f "$hist_file"
+
+    play_random_from_dir "$dir"
+    [ -f "$hist_file" ]
+    local saved
+    saved=$(cat "$hist_file")
+    [[ "$saved" == *".wav" ]]
+    rm -f "$hist_file"
+}
+
+@test "play_random_from_dir: cycles through all files before repeating" {
+    _source_play_midi
+    play_audio() { :; }
+    local dir="$TEST_CL4UD3_HOME/sounds/modem-cycle"
+    mkdir -p "$dir"
+    touch "$dir/a.wav" "$dir/b.wav" "$dir/c.wav"
+    local dir_hash
+    dir_hash=$(echo "$dir" | md5sum 2>/dev/null | cut -c1-8 || echo "$dir" | md5 2>/dev/null | cut -c1-8)
+    local hist_file="/tmp/.cl4ud3-cr4ck-lastplay-${dir_hash}"
+    rm -f "$hist_file"
+
+    # Play 3 times — should hit all 3 files exactly once
+    play_random_from_dir "$dir"
+    play_random_from_dir "$dir"
+    play_random_from_dir "$dir"
+
+    # History should have 3 lines, all unique
+    local lines unique_lines
+    lines=$(wc -l < "$hist_file" | tr -d ' ')
+    unique_lines=$(sort -u "$hist_file" | wc -l | tr -d ' ')
+    [ "$lines" -eq 3 ]
+    [ "$unique_lines" -eq 3 ]
+    rm -f "$hist_file"
+}
+
+@test "play_random_from_dir: resets cycle after all played" {
+    _source_play_midi
+    play_audio() { :; }
+    local dir="$TEST_CL4UD3_HOME/sounds/modem-reset"
+    mkdir -p "$dir"
+    touch "$dir/x.wav" "$dir/y.wav"
+    local dir_hash
+    dir_hash=$(echo "$dir" | md5sum 2>/dev/null | cut -c1-8 || echo "$dir" | md5 2>/dev/null | cut -c1-8)
+    local hist_file="/tmp/.cl4ud3-cr4ck-lastplay-${dir_hash}"
+    rm -f "$hist_file"
+
+    # Play 2 = exhaust pool, then play 3rd = should reset and continue
+    play_random_from_dir "$dir"
+    play_random_from_dir "$dir"
+    local last_of_first_cycle
+    last_of_first_cycle=$(tail -1 "$hist_file")
+
+    play_random_from_dir "$dir"
+    # After reset, history file should have 1 line (reset clears it, adds new)
+    local lines
+    lines=$(wc -l < "$hist_file" | tr -d ' ')
+    [ "$lines" -eq 1 ]
+    # New pick should differ from last of previous cycle
+    local new_pick
+    new_pick=$(cat "$hist_file")
+    [ "$new_pick" != "$last_of_first_cycle" ]
+    rm -f "$hist_file"
+}
+
+@test "play_random_from_dir: never repeats consecutively across cycles" {
+    _source_play_midi
+    play_audio() { :; }
+    local dir="$TEST_CL4UD3_HOME/sounds/modem-norepeat"
+    mkdir -p "$dir"
+    touch "$dir/a.wav" "$dir/b.wav" "$dir/c.wav"
+    local dir_hash
+    dir_hash=$(echo "$dir" | md5sum 2>/dev/null | cut -c1-8 || echo "$dir" | md5 2>/dev/null | cut -c1-8)
+    local hist_file="/tmp/.cl4ud3-cr4ck-lastplay-${dir_hash}"
+    rm -f "$hist_file"
+
+    local prev="" current=""
+    for i in $(seq 1 15); do
+        play_random_from_dir "$dir"
+        current=$(tail -1 "$hist_file")
+        if [ -n "$prev" ]; then
+            [ "$current" != "$prev" ]
+        fi
+        prev="$current"
+    done
+    rm -f "$hist_file"
+}
+
+@test "play_random_from_dir: single file still plays even if same as last" {
+    _source_play_midi
+    local played_file=""
+    play_audio() { played_file="$1"; }
+    local dir="$TEST_CL4UD3_HOME/sounds/modem-single"
+    mkdir -p "$dir"
+    touch "$dir/only.wav"
+    local dir_hash
+    dir_hash=$(echo "$dir" | md5sum 2>/dev/null | cut -c1-8 || echo "$dir" | md5 2>/dev/null | cut -c1-8)
+    local hist_file="/tmp/.cl4ud3-cr4ck-lastplay-${dir_hash}"
+    echo "$dir/only.wav" > "$hist_file"
+
+    play_random_from_dir "$dir"
+    [ "$played_file" = "$dir/only.wav" ]
+    rm -f "$hist_file"
+}
+
+@test "play_random_from_dir: falls back to MIDI when no WAV/MP3 exist" {
+    _source_play_midi
+    local played_file=""
+    play_audio() { played_file="$1"; }
+    local dir="$TEST_CL4UD3_HOME/sounds/modem-midi-only"
+    mkdir -p "$dir"
+    touch "$dir/beep.mid" "$dir/boop.mid"
+
+    play_random_from_dir "$dir"
+    [[ "$played_file" == *.mid ]]
+    local dir_hash
+    dir_hash=$(echo "$dir" | md5sum 2>/dev/null | cut -c1-8 || echo "$dir" | md5 2>/dev/null | cut -c1-8)
+    rm -f "/tmp/.cl4ud3-cr4ck-lastplay-${dir_hash}"
+}
+
+@test "play_random_from_dir: WAV present means MIDI ignored" {
+    _source_play_midi
+    local played_file=""
+    play_audio() { played_file="$1"; }
+    local dir="$TEST_CL4UD3_HOME/sounds/modem-mixed"
+    mkdir -p "$dir"
+    touch "$dir/tone.wav" "$dir/beep.mid"
+
+    play_random_from_dir "$dir"
+    [[ "$played_file" == *.wav ]]
+    local dir_hash
+    dir_hash=$(echo "$dir" | md5sum 2>/dev/null | cut -c1-8 || echo "$dir" | md5 2>/dev/null | cut -c1-8)
+    rm -f "/tmp/.cl4ud3-cr4ck-lastplay-${dir_hash}"
+}
+
 # ── play_loop_from_dir ──
 
 @test "play_loop_from_dir: returns 1 for nonexistent directory" {
