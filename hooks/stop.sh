@@ -16,6 +16,12 @@ kill_music_loop
 # Kill acid loop if running
 kill_acid_loop 2>/dev/null || true
 
+# Kill strobe (this tab + all if config changed to off)
+if [ -f "$CL4UD3_HOME/hooks/acid-mode.sh" ]; then
+    source "$CL4UD3_HOME/hooks/acid-mode.sh"
+    _strobe_kill 2>/dev/null || true
+fi
+
 # Kill any modem sound still playing
 kill_active_sounds
 

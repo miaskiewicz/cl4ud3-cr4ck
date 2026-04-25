@@ -56,7 +56,16 @@ _ACID_303_ENABLED="${_ACID_303_ENABLED:-true}"
 _ACID_STABS_ENABLED="${_ACID_STABS_ENABLED:-true}"
 _ACID_PADS_ENABLED="${_ACID_PADS_ENABLED:-true}"
 _ACID_303_BPM="${_ACID_303_BPM:-120}"
+_ACID_STROBE_ENABLED="${_ACID_STROBE_ENABLED:-false}"  # auto-start strobe with acid mode
 _ACID_303_SF="$HOME/.cl4ud3-cr4ck/sounds/HS TB-303.SF2"
+_ACID_SCOPE="${_ACID_SCOPE:-global}"             # "global" = all tabs get effects, "local" = single tab only
+
+# Strobe mode — seizure warning
+CL4UD3_STROBE_MODE="${CL4UD3_STROBE_MODE:-false}"
+_STROBE_SPEED="${_STROBE_SPEED:-0.08}"          # seconds between flashes
+_STROBE_BURST_LEN="${_STROBE_BURST_LEN:-6}"     # frames per burst
+_STROBE_PAUSE="${_STROBE_PAUSE:-0.4}"            # pause between bursts
+_STROBE_SCOPE="${_STROBE_SCOPE:-global}"          # "global" = all tabs flash, "local" = single tab only
 
 # Master kill switch — overrides everything above
 CL4UD3_SOUNDS_ENABLED="${CL4UD3_SOUNDS_ENABLED:-true}"

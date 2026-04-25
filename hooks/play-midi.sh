@@ -74,6 +74,15 @@ cleanup_all_stale_files() {
             rm -f "$_PF_ACID" "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE"
         fi
     fi
+    # Clean stale strobe PIDs (per-tab)
+    for pf in /tmp/.cl4ud3-cr4ck-strobe-pid-*; do
+        [ -f "$pf" ] || continue
+        local spid
+        spid=$(cat "$pf" 2>/dev/null)
+        if [ -z "$spid" ] || ! kill -0 "$spid" 2>/dev/null; then
+            rm -f "$pf"
+        fi
+    done
     for pf in /tmp/.cl4ud3-cr4ck-sound-pid-* /tmp/.cl4ud3-cr4ck-music-pid-* /tmp/.cl4ud3-cr4ck-timer-pid-* /tmp/.cl4ud3-cr4ck-loading-pid-*; do
         [ -f "$pf" ] || continue
         local pid

@@ -2134,3 +2134,5 @@ print('ok')
     run grep -A160 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial 'next_dir/chords.txt'
 }
+
+# NOTE: Strobe mode tests are in strobe_mode.bats

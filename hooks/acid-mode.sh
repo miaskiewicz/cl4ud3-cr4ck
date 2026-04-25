@@ -139,6 +139,14 @@ _is_acid_active() {
 # Start acid 303 loop if not already running
 _acid_start_loop() {
     _is_acid_active || return 0
+
+    # Auto-start strobe when acid is active and strobe linked
+    if [ "$_ACID_STROBE_ENABLED" = "true" ] && ! _is_strobe_running; then
+        CL4UD3_STROBE_MODE="true"
+        export CL4UD3_STROBE_MODE
+        _strobe_start_loop
+    fi
+
     [ "$_ACID_303_ENABLED" = "true" ] || return 0
     # Only start if play-midi.sh is sourced (has play_acid_loop)
     type play_acid_loop >/dev/null 2>&1 || return 0
@@ -234,5 +242,192 @@ _acid_toggle_pads() {
         _ACID_PADS_ENABLED="true"
         export _ACID_PADS_ENABLED
         echo "pads: ON"
+    fi
+}
+
+# ── STROBE MODE ──────────────────────────────────────────────────────────────
+# Pulsating bright white flashes — full screen strobe via /dev/tty
+# Uses DECSCNM (reverse video) + bright white bursts for seizure-grade flicker
+# Toggle via: /cr4ck strobe
+
+# Strobe PID: "global" = per-tab (all tabs flash), "local" = single instance
+if [ "$_STROBE_SCOPE" = "local" ]; then
+    _PF_STROBE="/tmp/.cl4ud3-cr4ck-strobe-pid"
+else
+    _PF_STROBE="/tmp/.cl4ud3-cr4ck-strobe-pid-$CL4UD3_SID"
+fi
+
+_is_strobe_active() {
+    [ "$CL4UD3_STROBE_MODE" = "true" ] && return 0
+    return 1
+}
+
+_is_strobe_running() {
+    [ -f "$_PF_STROBE" ] || return 1
+    local pid
+    pid=$(cat "$_PF_STROBE" 2>/dev/null)
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && return 0
+    return 1
+}
+
+# Single strobe burst — bright white flash sequence
+_strobe_burst() {
+    [ ! -w /dev/tty ] && return
+    local speed="${_STROBE_SPEED:-0.08}"
+    local frames="${_STROBE_BURST_LEN:-6}"
+
+    for ((f=0; f<frames; f++)); do
+        # FLASH ON — reverse video + bright white foreground
+        printf '\033[?5h' > /dev/tty
+        printf '\033[97m\033[107m' > /dev/tty
+        sleep "$speed"
+        # FLASH OFF — restore normal
+        printf '\033[?5l' > /dev/tty
+        printf '\033[0m' > /dev/tty
+        sleep "$speed"
+    done
+    # Ensure clean state
+    printf '\033[?5l\033[0m' > /dev/tty
+}
+
+# Strobe with random white bar flickers (works alongside acid)
+_strobe_flicker() {
+    [ ! -w /dev/tty ] && return
+    local width=80
+    local bar=""
+    for ((i=0; i<width; i++)); do bar+="█"; done
+
+    # 2-4 rapid white bars
+    local count=$((2 + RANDOM % 3))
+    for ((c=0; c<count; c++)); do
+        # Bright white on white — maximum burn
+        printf '\033[97;107m%s\033[0m\n' "$bar" > /dev/tty
+        sleep 0.03
+        # Erase
+        printf '\033[1A\033[K' > /dev/tty
+        sleep 0.05
+    done
+}
+
+# Combined strobe effect — randomly picks intensity
+_strobe_effect() {
+    [ ! -w /dev/tty ] && return
+    local style=$(( RANDOM % 3 ))
+    case $style in
+        0) _strobe_burst ;;
+        1) _strobe_flicker ;;
+        2) _strobe_burst; _strobe_flicker ;;
+    esac
+}
+
+# Background strobe loop — continuous pulsating flashes
+_strobe_start_loop() {
+    _is_strobe_active || return 0
+
+    # Already running?
+    if _is_strobe_running; then
+        return 0
+    fi
+
+    [ ! -w /dev/tty ] && return 1
+
+    local my_pidfile="$_PF_STROBE"
+    (
+        trap '' HUP
+        trap '_strobe_cleanup_on_exit' EXIT
+
+        while [ -f "$my_pidfile" ]; do
+            # Strobe burst
+            local speed="${_STROBE_SPEED:-0.08}"
+            local frames="${_STROBE_BURST_LEN:-6}"
+            local pause="${_STROBE_PAUSE:-0.4}"
+
+            for ((f=0; f<frames; f++)); do
+                [ -f "$my_pidfile" ] || break
+                # FLASH — reverse video (inverts ALL screen content)
+                printf '\033[?5h' > /dev/tty 2>/dev/null
+                sleep "$speed" 2>/dev/null
+                # NORMAL
+                printf '\033[?5l' > /dev/tty 2>/dev/null
+                sleep "$speed" 2>/dev/null
+            done
+
+            # Random white bar flicker between bursts (30% chance)
+            if [ $((RANDOM % 10)) -lt 3 ]; then
+                local bar="████████████████████████████████████████████████████████████████████████████████"
+                printf '\033[97;107m%s\033[0m' "$bar" > /dev/tty 2>/dev/null
+                sleep 0.04
+                printf '\r\033[K' > /dev/tty 2>/dev/null
+            fi
+
+            # Pause between bursts — randomize slightly
+            local jitter
+            jitter=$(awk "BEGIN { srand(); printf \"%.2f\", $pause * (0.5 + rand()) }" 2>/dev/null)
+            [ -n "$jitter" ] || jitter="$pause"
+            sleep "$jitter" 2>/dev/null
+
+            # If acid mode also on, occasionally throw acid colors into the strobe
+            if _is_acid_active 2>/dev/null; then
+                if [ $((RANDOM % 4)) -eq 0 ]; then
+                    local ci=$(( RANDOM % ${#_ACID_COLORS[@]} ))
+                    printf '\033[38;5;%dm' "${_ACID_COLORS[$ci]}" > /dev/tty 2>/dev/null
+                    printf '\033[?5h' > /dev/tty 2>/dev/null
+                    sleep 0.06
+                    printf '\033[?5l\033[0m' > /dev/tty 2>/dev/null
+                fi
+            fi
+        done
+    ) &
+    local loop_pid=$!
+    echo "$loop_pid" > "$_PF_STROBE"
+    disown "$loop_pid" 2>/dev/null
+}
+
+_strobe_cleanup_on_exit() {
+    printf '\033[?5l\033[0m' > /dev/tty 2>/dev/null
+}
+
+# Kill strobe loop
+# Kill this tab's strobe loop
+_strobe_kill() {
+    if [ -f "$_PF_STROBE" ]; then
+        local pid
+        pid=$(cat "$_PF_STROBE" 2>/dev/null)
+        rm -f "$_PF_STROBE"
+        if [ -n "$pid" ]; then
+            kill "$pid" 2>/dev/null || true
+        fi
+    fi
+    # Ensure terminal is clean
+    printf '\033[?5l\033[0m' > /dev/tty 2>/dev/null || true
+}
+
+# Kill ALL strobe loops across all tabs
+_strobe_kill_all() {
+    for pf in /tmp/.cl4ud3-cr4ck-strobe-pid /tmp/.cl4ud3-cr4ck-strobe-pid-*; do
+        [ -f "$pf" ] || continue
+        local pid
+        pid=$(cat "$pf" 2>/dev/null)
+        rm -f "$pf"
+        if [ -n "$pid" ]; then
+            kill "$pid" 2>/dev/null || true
+        fi
+    done
+    # Clean local terminal
+    printf '\033[?5l\033[0m' > /dev/tty 2>/dev/null || true
+}
+
+# Toggle strobe on/off
+_strobe_toggle() {
+    if _is_strobe_running; then
+        CL4UD3_STROBE_MODE="false"
+        export CL4UD3_STROBE_MODE
+        _strobe_kill_all
+        echo "strobe: OFF"
+    else
+        CL4UD3_STROBE_MODE="true"
+        export CL4UD3_STROBE_MODE
+        _strobe_start_loop
+        echo "strobe: ON ⚡⚡⚡"
     fi
 }

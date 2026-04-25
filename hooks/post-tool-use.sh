@@ -56,6 +56,10 @@ if [ -f "$CL4UD3_HOME/hooks/acid-mode.sh" ]; then
         _acid_start_loop
         _acid_maybe_stab
     fi
+    # ⚡ strobe — keep loop alive between tool calls
+    if _is_strobe_active; then
+        _strobe_start_loop
+    fi
 fi
 
 exit 0
