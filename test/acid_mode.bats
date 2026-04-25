@@ -145,8 +145,8 @@ teardown() {
     assert_success
 }
 
-@test "acid-mode.sh: _ACID_IDLE_TIMEOUT defaults to 30" {
-    run grep '_ACID_IDLE_TIMEOUT.*:-30' "$CL4UD3_HOME/hooks/acid-mode.sh"
+@test "acid-mode.sh: _ACID_IDLE_TIMEOUT defaults to 100" {
+    run grep '_ACID_IDLE_TIMEOUT.*:-100' "$CL4UD3_HOME/hooks/acid-mode.sh"
     assert_success
 }
 
@@ -157,7 +157,7 @@ teardown() {
     [ "$_ACID_303_BPM" = "120" ]
     [ "$_ACID_STAB_CHANCE" = "0.95" ]
     [ "$_ACID_STAB_RANDOM_CHANCE" = "0.6" ]
-    [ "$_ACID_IDLE_TIMEOUT" = "30" ]
+    [ "$_ACID_IDLE_TIMEOUT" = "100" ]
 }
 
 @test "acid-mode.sh: config vars respect env overrides" {

@@ -9,6 +9,9 @@ fi
 source "$CL4UD3_HOME/config.sh"
 source "$CL4UD3_HOME/hooks/play-midi.sh"
 
+# Reset acid idle timeout — any session's tool call keeps 303 alive
+_acid_touch_activity
+
 # Kill startup music loop if still playing
 if [ "$CL4UD3_KILL_INTRO_ON_MESSAGE" != "false" ]; then
     kill_music_loop

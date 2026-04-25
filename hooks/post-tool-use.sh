@@ -11,6 +11,9 @@ fi
 source "$CL4UD3_HOME/config.sh"
 source "$CL4UD3_HOME/hooks/play-midi.sh"
 
+# Reset acid idle timeout — any session's tool call keeps 303 alive
+_acid_touch_activity
+
 # Cooldown: skip if last sound was < 10 seconds ago
 # Shares cooldown with PreToolUse to avoid overlapping modem sounds
 LOCKFILE="/tmp/.cl4ud3-cr4ck-tool-cooldown"

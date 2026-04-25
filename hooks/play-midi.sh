@@ -41,7 +41,7 @@ _acid_touch_activity() {
 
 # Check if idle too long — returns 0 if timed out
 _acid_is_idle() {
-    local timeout="${_ACID_IDLE_TIMEOUT:-30}"
+    local timeout="${_ACID_IDLE_TIMEOUT:-100}"
     [ -f "$_ACID_ACTIVITY_FILE" ] || return 0
     local last now diff
     last=$(stat -f %m "$_ACID_ACTIVITY_FILE" 2>/dev/null || stat -c %Y "$_ACID_ACTIVITY_FILE" 2>/dev/null || echo 0)
