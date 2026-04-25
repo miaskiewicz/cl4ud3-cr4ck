@@ -35,16 +35,20 @@ LEAD_PROGRAM = 81     # Lead 2 (sawtooth)
 PAD_PROGRAM = 89      # Pad 2 (warm)
 SQUARE_PROGRAM = 80   # Lead 1 (square)
 
-# Pad chord types — diatonic triads + color chords (Amiga jungle style)
+# Pad chord types — Detroit techno / early house + Amiga crunch
 # Each chord = list of intervals from root
+# Think: Strings of Life, Inner City, early Derrick May — big open voicings
 CHORD_TYPES = [
-    [0, 7],           # power chord (root + 5th)
-    [0, 3, 7],        # minor triad
-    [0, 5, 7],        # sus4
-    [0, 2, 7],        # sus2
-    [0, 3, 7, 10],    # minor 7th
-    [0, 3, 10],       # minor 7th (no 5th) — thin + dark
-    [0, 7, 12],       # octave power chord
+    [0, 3, 7],        # minor triad — classic Detroit
+    [0, 3, 7, 14],    # minor add9 — lush Strings of Life vibe
+    [0, 5, 7],        # sus4 — tension, release never comes
+    [0, 7, 10],       # min7 open (no 3rd) — dark + hollow
+    [0, 3, 10, 14],   # min9 (no 5th) — deep house staple
+    [0, 7, 12],       # power + octave — Amiga tracker crunch
+    [0, 5, 10],       # sus4(b7) rootless — spooky detroit
+    [0, 3, 7, 10],    # min7 — Inner City Big Fun
+    [0, 7, 15],       # root + 5th + maj9 — wide open voicing
+    [0, 2, 7, 10],    # sus2 + b7 — funky tension
 ]
 
 
@@ -63,16 +67,16 @@ def _pick_key():
 # ── Chord Progression Generation ─────────────────────────────────────────────
 
 def _generate_chord_progression(note_pool, root_midi):
-    """Build 4-8 diatonic chords for dark pad layer.
+    """Build 4-8 chords for Detroit techno / early house pad layer.
 
-    Chords use scale tones from note_pool, transposed to octave 3-4 range
-    (MIDI 48-72) for warm pad register. Returns list of chords, each chord
-    a list of 2-3 MIDI notes.
+    Funky chord movement — 4ths, minor 3rds, whole steps. Wide voicings
+    spanning octaves 3-5 (MIDI 48-84) for that big open Detroit sound.
+    Amiga crunch comes from the 22050Hz bitcrush + gain in fluidsynth.
+    Returns list of chords, each chord a list of 2-4 MIDI notes.
     """
-    # Filter note pool to pad range (octave 3-4)
+    # Filter note pool to pad range (octave 3-4 for roots)
     pad_notes = [n for n in note_pool if 48 <= n <= 72]
     if not pad_notes:
-        # Transpose root into range
         r = root_midi
         while r < 48:
             r += 12
@@ -83,25 +87,32 @@ def _generate_chord_progression(note_pool, root_midi):
     num_chords = random.randint(4, 8)
     chords = []
 
-    for _ in range(num_chords):
-        # Pick a root from pad-range scale tones
-        root = random.choice(pad_notes)
+    # Detroit progressions move by 4ths, minor 3rds, steps — not random jumps
+    root = random.choice(pad_notes)
+    movements = [0, 5, 3, -2, 7, -5, 2, -3, 10, -7]  # funky intervals
+
+    for i in range(num_chords):
+        if i > 0:
+            # Move root by a funky interval, stay in scale
+            move = random.choice(movements)
+            candidates = [n for n in pad_notes if abs(n - (root + move)) <= 2]
+            root = random.choice(candidates) if candidates else random.choice(pad_notes)
+
         chord_type = random.choice(CHORD_TYPES)
 
-        # Build chord, snap to scale where possible
         chord = []
         for interval in chord_type:
             note = root + interval
-            # Keep in pad range — drop octave if too high
-            if note > 72:
+            # Wide voicing — allow up to octave 5 (MIDI 84)
+            if note > 84:
                 note -= 12
             if note < 48:
                 note += 12
             chord.append(note)
 
-        # Limit to 2-3 notes for that crisp tracker sound
-        if len(chord) > 3:
-            chord = chord[:3]
+        # Allow up to 4 notes for thick Detroit stacks
+        if len(chord) > 4:
+            chord = chord[:4]
 
         chords.append(sorted(set(chord)))
 

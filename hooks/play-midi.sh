@@ -406,23 +406,22 @@ play_acid_loop() {
         # Publish chord progression for pad layer
         [ -f "$cur_dir/chords.txt" ] && cp "$cur_dir/chords.txt" "$_ACID_CHORDS_FILE"
 
-        # Start persistent fluidsynth with FIFO input
-        # Reads commands from FIFO — stabs sent here too (channel 1)
+        # Startup commands file — fluidsynth -f runs after SF2/MIDI load
+        local fs_cmds="/tmp/.cl4ud3-acid-cmds-$$"
+        printf 'player_loop -1\nplayer_start\n' > "$fs_cmds"
+
+        # Start persistent fluidsynth with FIFO input + startup config
+        # -f runs player_loop/player_start AFTER MIDI is loaded (reliable)
+        # Reads interactive commands from FIFO — stabs sent here too (channel 1)
         # nohup protects tail/fluidsynth from SIGHUP when parent shells exit
         nohup tail -f "$acid_fifo" 2>/dev/null | nohup fluidsynth \
+            -f "$fs_cmds" \
             -g 4.0 \
             -o synth.chorus.active=yes -o synth.chorus.depth=3 -o synth.chorus.speed=0.2 \
             -o synth.reverb.active=yes -o synth.reverb.room-size=0.2 -o synth.reverb.level=0.3 \
             -o synth.sample-rate=22050 \
             "$sf" "$cur_dir/loop.mid" >/dev/null 2>&1 &
         local fs_pid=$!
-
-        # Give fluidsynth time to load
-        sleep 0.3
-
-        # Start playback with infinite loop
-        echo "player_loop -1" > "$acid_fifo"
-        echo "player_start" > "$acid_fifo"
 
         # Vocal sample trigger — 20% chance every 16 measures (~80 measures avg)
         local vocals_dir="$CL4UD3_HOME/sounds/acid-vocals"
@@ -502,15 +501,32 @@ play_acid_loop() {
                 gen_pid=""
             fi
 
-            # Swap: stop player, load next MIDI, restart
+            # Swap: kill old fluidsynth, start new with new MIDI
+            # (can't reload MIDI via shell — fluidsynth keeps old file in memory)
             if [ -n "$next_dir" ] && [ -d "$next_dir" ] && [ -f "$next_dir/loop.mid" ]; then
-                echo "player_stop" > "$acid_fifo"
+                # Kill old fluidsynth + tail pipeline
+                echo "quit" > "$acid_fifo" 2>/dev/null || true
+                kill "$fs_pid" 2>/dev/null; wait "$fs_pid" 2>/dev/null
+                pkill -f "tail -f $acid_fifo" 2>/dev/null || true
                 sleep 0.1
+
+                # Swap in new batch
                 cp "$next_dir/loop.mid" "$cur_dir/loop.mid"
-                # Refresh note pool for stabs + chords for pads
                 [ -f "$next_dir/notes.txt" ] && cp "$next_dir/notes.txt" "$_ACID_NOTES_FILE"
                 [ -f "$next_dir/chords.txt" ] && cp "$next_dir/chords.txt" "$_ACID_CHORDS_FILE"
-                echo "player_start" > "$acid_fifo"
+
+                # Write fresh startup commands
+                printf 'player_loop -1\nplayer_start\n' > "$fs_cmds"
+
+                # Start new fluidsynth with new MIDI
+                nohup tail -f "$acid_fifo" 2>/dev/null | nohup fluidsynth \
+                    -f "$fs_cmds" \
+                    -g 4.0 \
+                    -o synth.chorus.active=yes -o synth.chorus.depth=3 -o synth.chorus.speed=0.2 \
+                    -o synth.reverb.active=yes -o synth.reverb.room-size=0.2 -o synth.reverb.level=0.3 \
+                    -o synth.sample-rate=22050 \
+                    "$sf" "$cur_dir/loop.mid" >/dev/null 2>&1 &
+                fs_pid=$!
 
                 [ -n "$prev_dir" ] && rm -rf "$prev_dir"
                 prev_dir=""
@@ -528,7 +544,7 @@ play_acid_loop() {
         pkill -f "tail -f $acid_fifo" 2>/dev/null || true
         [ -n "$prev_dir" ] && rm -rf "$prev_dir"
         [ -n "$cur_dir" ] && rm -rf "$cur_dir"
-        rm -f "$acid_fifo" "$_ACID_FIFO_PATH_FILE" "$_ACID_NOTES_FILE" "$_ACID_CHORDS_FILE"
+        rm -f "$acid_fifo" "$_ACID_FIFO_PATH_FILE" "$_ACID_NOTES_FILE" "$_ACID_CHORDS_FILE" "$fs_cmds"
         [ -n "$cur_dir" ] && rm -rf "$cur_dir"
         [ -n "$next_dir" ] && rm -rf "$next_dir"
         rm -f "$my_pidfile" "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE" "$_ACID_ACTIVITY_FILE"
@@ -827,37 +843,46 @@ _play_pad_via_fifo() {
     local chord_notes=($chord_line)
     [ "${#chord_notes[@]}" -gt 0 ] || return
 
-    # Pick a crisp SQR program for retro pad character
+    # Pick a crisp SQR program for Amiga crunch character
     local sqr_progs=(50 55 60 65 70 75 80 85)
     local prog=${sqr_progs[$((RANDOM % ${#sqr_progs[@]}))]}
 
-    # Sustain duration: 4-8 beats worth of seconds
-    local sustain_beats=$((4 + RANDOM % 5))
+    # Long sustain: 8-16 beats — let chords breathe like Detroit
+    local sustain_beats=$((8 + RANDOM % 9))
     local sustain_secs
     sustain_secs=$(awk "BEGIN { printf \"%.1f\", $sustain_beats * 60.0 / $bpm }" 2>/dev/null)
-    [ -n "$sustain_secs" ] || sustain_secs=4
+    [ -n "$sustain_secs" ] || sustain_secs=6
 
     # Fire pad in background — sustained chord
     (
-        # Set up channel 2: program + warm filter settings
+        # Set up channel 2: program + crunchy settings
         echo "prog 2 $prog" > "$fifo"
-        echo "cc 2 71 90" > "$fifo"    # resonance — warm not screaming
-        echo "cc 2 74 70" > "$fifo"    # filter — open but not bright
-        echo "cc 2 11 85" > "$fifo"    # expression — slightly back for pad layer
+        echo "cc 2 71 110" > "$fifo"   # resonance — pushed for crunch
+        echo "cc 2 74 95" > "$fifo"    # filter — wide open, let harmonics through
+        echo "cc 2 11 120" > "$fifo"   # expression — drive hard into bitcrush
+        echo "cc 2 91 127" > "$fifo"   # reverb send — max, big wash
+        echo "cc 2 93 80" > "$fifo"    # chorus send — thicken
 
-        # Note on — all chord notes
+        # Note on — all chord notes, hot velocity for crunch
         for n in "${chord_notes[@]}"; do
-            echo "noteon 2 $n 75" > "$fifo"
+            echo "noteon 2 $n 110" > "$fifo"
         done
 
-        # Sustain
-        sleep "$sustain_secs" 2>/dev/null || true
+        # Slow filter sweep during sustain — adds movement
+        local half_secs
+        half_secs=$(awk "BEGIN { printf \"%.1f\", $sustain_secs / 2 }" 2>/dev/null)
+        [ -n "$half_secs" ] || half_secs=3
+        sleep "$half_secs" 2>/dev/null || true
+        echo "cc 2 74 75" > "$fifo"    # filter closes slightly mid-chord
+        sleep "$half_secs" 2>/dev/null || true
 
-        # Slow filter close during release
-        echo "cc 2 74 50" > "$fifo"
+        # Slow filter close during release — long tail into reverb
+        echo "cc 2 74 55" > "$fifo"
+        sleep 0.5
+        echo "cc 2 74 35" > "$fifo"
+        sleep 0.4
+        echo "cc 2 74 20" > "$fifo"
         sleep 0.3
-        echo "cc 2 74 30" > "$fifo"
-        sleep 0.2
 
         # Note off — all chord notes
         for n in "${chord_notes[@]}"; do

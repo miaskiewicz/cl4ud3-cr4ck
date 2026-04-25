@@ -612,7 +612,7 @@ teardown() {
 }
 
 @test "play-midi.sh: play_acid_loop disowns background process" {
-    run grep -A170 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    run grep -A200 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial "disown"
 }
 
@@ -1995,7 +1995,7 @@ print('ok')
 }
 
 @test "play-midi.sh: pad has sustained notes with sleep" {
-    run grep -A50 '_play_pad_via_fifo()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    run grep -A65 '_play_pad_via_fifo()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial "sustain"
     assert_output --partial "sleep"
 }
@@ -2022,7 +2022,7 @@ print('ok')
 @test "acid-303.py: CHORD_TYPES defined" {
     run grep -A10 'CHORD_TYPES' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
     assert_success
-    assert_output --partial "power chord"
+    assert_output --partial "Amiga tracker crunch"
 }
 
 @test "acid-303.py: generate writes chords.txt" {
@@ -2068,7 +2068,7 @@ chords = m._generate_chord_progression(notes, 48)
 assert len(chords) >= 4, f'too few chords: {len(chords)}'
 assert len(chords) <= 8, f'too many chords: {len(chords)}'
 for c in chords:
-    assert 2 <= len(c) <= 3, f'chord has {len(c)} notes: {c}'
+    assert 2 <= len(c) <= 4, f'chord has {len(c)} notes: {c}'
     for n in c:
         assert 48 <= n <= 84, f'note {n} out of pad range'
 print('ok')
