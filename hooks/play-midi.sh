@@ -406,22 +406,25 @@ play_acid_loop() {
         # Publish chord progression for pad layer
         [ -f "$cur_dir/chords.txt" ] && cp "$cur_dir/chords.txt" "$_ACID_CHORDS_FILE"
 
-        # Startup commands file — fluidsynth -f runs after SF2/MIDI load
-        local fs_cmds="/tmp/.cl4ud3-acid-cmds-$$"
-        printf 'player_loop -1\nplayer_start\n' > "$fs_cmds"
+        # Open FIFO read-write — keeps it alive on macOS
+        # (macOS tail -f exits when last writer closes FIFO = EOF)
+        exec 7<>"$acid_fifo"
 
-        # Start persistent fluidsynth with FIFO input + startup config
-        # -f runs player_loop/player_start AFTER MIDI is loaded (reliable)
-        # Reads interactive commands from FIFO — stabs sent here too (channel 1)
-        # nohup protects tail/fluidsynth from SIGHUP when parent shells exit
-        nohup tail -f "$acid_fifo" 2>/dev/null | nohup fluidsynth \
-            -f "$fs_cmds" \
+        # Start persistent fluidsynth reading from fd 7
+        # Stabs + player control sent via FIFO path, read via fd 7
+        # nohup protects from SIGHUP when parent shells exit
+        nohup fluidsynth \
             -g 4.0 \
             -o synth.chorus.active=yes -o synth.chorus.depth=3 -o synth.chorus.speed=0.2 \
             -o synth.reverb.active=yes -o synth.reverb.room-size=0.2 -o synth.reverb.level=0.3 \
             -o synth.sample-rate=22050 \
-            "$sf" "$cur_dir/loop.mid" >/dev/null 2>&1 &
+            "$sf" "$cur_dir/loop.mid" <&7 >/dev/null 2>&1 &
         local fs_pid=$!
+
+        # Give fluidsynth time to load SF2 + MIDI, then start looping
+        sleep 1
+        echo "player_loop -1" > "$acid_fifo"
+        echo "player_start" > "$acid_fifo"
 
         # Vocal sample trigger — 20% chance every 16 measures (~80 measures avg)
         local vocals_dir="$CL4UD3_HOME/sounds/acid-vocals"
@@ -453,8 +456,8 @@ play_acid_loop() {
             [ -n "$measure_secs" ] || measure_secs=2
             (
                 while [ -f "$my_pidfile" ]; do
-                    # Wait 2-4 measures between chords
-                    local wait_measures=$((2 + RANDOM % 3))
+                    # Wait 4-8 measures between chords — sparse, let bass breathe
+                    local wait_measures=$((4 + RANDOM % 5))
                     sleep $((wait_measures * measure_secs)) 2>/dev/null || break
                     [ -f "$my_pidfile" ] || break
                     # Play pad chord via FIFO
@@ -504,10 +507,9 @@ play_acid_loop() {
             # Swap: kill old fluidsynth, start new with new MIDI
             # (can't reload MIDI via shell — fluidsynth keeps old file in memory)
             if [ -n "$next_dir" ] && [ -d "$next_dir" ] && [ -f "$next_dir/loop.mid" ]; then
-                # Kill old fluidsynth + tail pipeline
+                # Kill old fluidsynth
                 echo "quit" > "$acid_fifo" 2>/dev/null || true
                 kill "$fs_pid" 2>/dev/null; wait "$fs_pid" 2>/dev/null
-                pkill -f "tail -f $acid_fifo" 2>/dev/null || true
                 sleep 0.1
 
                 # Swap in new batch
@@ -515,18 +517,17 @@ play_acid_loop() {
                 [ -f "$next_dir/notes.txt" ] && cp "$next_dir/notes.txt" "$_ACID_NOTES_FILE"
                 [ -f "$next_dir/chords.txt" ] && cp "$next_dir/chords.txt" "$_ACID_CHORDS_FILE"
 
-                # Write fresh startup commands
-                printf 'player_loop -1\nplayer_start\n' > "$fs_cmds"
-
-                # Start new fluidsynth with new MIDI
-                nohup tail -f "$acid_fifo" 2>/dev/null | nohup fluidsynth \
-                    -f "$fs_cmds" \
+                # Start new fluidsynth with new MIDI (fd 7 still open)
+                nohup fluidsynth \
                     -g 4.0 \
                     -o synth.chorus.active=yes -o synth.chorus.depth=3 -o synth.chorus.speed=0.2 \
                     -o synth.reverb.active=yes -o synth.reverb.room-size=0.2 -o synth.reverb.level=0.3 \
                     -o synth.sample-rate=22050 \
-                    "$sf" "$cur_dir/loop.mid" >/dev/null 2>&1 &
+                    "$sf" "$cur_dir/loop.mid" <&7 >/dev/null 2>&1 &
                 fs_pid=$!
+                sleep 1
+                echo "player_loop -1" > "$acid_fifo"
+                echo "player_start" > "$acid_fifo"
 
                 [ -n "$prev_dir" ] && rm -rf "$prev_dir"
                 prev_dir=""
@@ -541,10 +542,10 @@ play_acid_loop() {
         echo "quit" > "$acid_fifo" 2>/dev/null || true
         [ -n "$gen_pid" ] && { kill "$gen_pid" 2>/dev/null; wait "$gen_pid" 2>/dev/null; }
         kill "$fs_pid" 2>/dev/null; wait "$fs_pid" 2>/dev/null
-        pkill -f "tail -f $acid_fifo" 2>/dev/null || true
+        exec 7>&- 2>/dev/null  # Close FIFO fd
         [ -n "$prev_dir" ] && rm -rf "$prev_dir"
         [ -n "$cur_dir" ] && rm -rf "$cur_dir"
-        rm -f "$acid_fifo" "$_ACID_FIFO_PATH_FILE" "$_ACID_NOTES_FILE" "$_ACID_CHORDS_FILE" "$fs_cmds"
+        rm -f "$acid_fifo" "$_ACID_FIFO_PATH_FILE" "$_ACID_NOTES_FILE" "$_ACID_CHORDS_FILE"
         [ -n "$cur_dir" ] && rm -rf "$cur_dir"
         [ -n "$next_dir" ] && rm -rf "$next_dir"
         rm -f "$my_pidfile" "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE" "$_ACID_ACTIVITY_FILE"
@@ -857,7 +858,7 @@ _play_pad_via_fifo() {
     (
         # Set up channel 2: program + Amiga tracker crunch
         echo "prog 2 $prog" > "$fifo"
-        echo "cc 2 7 76" > "$fifo"     # channel volume — 60%, pad sits behind bass
+        echo "cc 2 7 53" > "$fifo"     # channel volume — 42%, pad way behind bass
         echo "cc 2 71 127" > "$fifo"   # resonance — max squelch, Amiga nasty
         echo "cc 2 74 95" > "$fifo"    # filter — wide open, let harmonics through
         echo "cc 2 11 127" > "$fifo"   # expression — max overdrive into bitcrush

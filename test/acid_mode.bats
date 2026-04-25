@@ -2094,10 +2094,10 @@ print('ok')
     assert_output --partial "_ACID_CHORDS_FILE"
 }
 
-@test "play-midi.sh: pad loop waits 2-4 measures" {
+@test "play-midi.sh: pad loop waits 4-8 measures" {
     run grep -A170 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial "wait_measures"
-    assert_output --partial "2 + RANDOM % 3"
+    assert_output --partial "4 + RANDOM % 5"
 }
 
 @test "play-midi.sh: pad loop self-terminates on pidfile removal" {
