@@ -30,6 +30,8 @@ _ACID_BEAT_FILE="/tmp/.cl4ud3-cr4ck-acid-beat"
 _ACID_DIR_FILE="/tmp/.cl4ud3-cr4ck-acid-dir"
 _ACID_ACTIVITY_FILE="/tmp/.cl4ud3-cr4ck-acid-activity"
 _ACID_STAB_DIR="/tmp/.cl4ud3-cr4ck-acid-stabs-$CL4UD3_SID"
+_ACID_NOTES_FILE="/tmp/.cl4ud3-acid-notes"
+_ACID_FIFO_PATH_FILE="/tmp/.cl4ud3-acid-fifo-path"
 
 # Touch activity file — called from hooks to signal tool use
 _acid_touch_activity() {
@@ -335,18 +337,27 @@ _acid_write_beat_file() {
 # Play a MIDI file in blocking mode (used by acid loop)
 _play_midi_blocking() {
     local midi_file="$1"
+    local sf_override="${2:-}"  # optional soundfont override
+    local sf="${sf_override:-$CL4UD3_SOUNDFONT}"
     [ ! -f "$midi_file" ] && return 1
+
+    # Acid mode: drive gain hard for distortion + chorus for thickness
+    local fs_extra=""
+    if [ -n "$sf_override" ]; then
+        fs_extra="-g 4.0 -o synth.chorus.active=yes -o synth.chorus.depth=3 -o synth.chorus.speed=0.2 -o synth.reverb.active=yes -o synth.reverb.room-size=0.2 -o synth.reverb.level=0.3 -o synth.sample-rate=22050"
+    fi
 
     if [ -n "$CL4UD3_MIDI_PLAYER" ]; then
         if [[ "$CL4UD3_MIDI_PLAYER" == *fluidsynth* ]]; then
             # shellcheck disable=SC2086
-            $CL4UD3_MIDI_PLAYER -ni "$CL4UD3_SOUNDFONT" "$midi_file" >/dev/null 2>&1
+            $CL4UD3_MIDI_PLAYER -ni $fs_extra "$sf" "$midi_file" >/dev/null 2>&1
         else
             # shellcheck disable=SC2086
             $CL4UD3_MIDI_PLAYER "$midi_file" >/dev/null 2>&1
         fi
-    elif command -v fluidsynth >/dev/null 2>&1 && [ -n "$CL4UD3_SOUNDFONT" ]; then
-        fluidsynth -ni "$CL4UD3_SOUNDFONT" "$midi_file" >/dev/null 2>&1
+    elif command -v fluidsynth >/dev/null 2>&1 && [ -n "$sf" ]; then
+        # shellcheck disable=SC2086
+        fluidsynth -ni $fs_extra "$sf" "$midi_file" >/dev/null 2>&1
     elif command -v timidity >/dev/null 2>&1; then
         timidity "$midi_file" >/dev/null 2>&1
     elif [ -x "$CL4UD3_HOME/bin/playmidi" ]; then
@@ -355,9 +366,9 @@ _play_midi_blocking() {
 }
 
 play_acid_loop() {
-    local bpm="${1:-140}"
-    local batch_size=8
-    local repeats=2  # play each pattern twice before moving on
+    local bpm="${1:-120}"
+    local sections=4      # sections per batch (each = 16 measures of A/B patterns)
+    local measures=16     # measures per section
 
     # Global singleton: if another terminal already runs 303, skip
     if [ -f "$_PF_ACID" ]; then
@@ -371,17 +382,73 @@ play_acid_loop() {
 
     _acid_touch_activity
 
+    # FIFO for fluidsynth shell commands (stabs + player control)
+    local acid_fifo="/tmp/.cl4ud3-acid-fifo-$$"
+    mkfifo "$acid_fifo" 2>/dev/null || return 1
+    echo "$acid_fifo" > "/tmp/.cl4ud3-acid-fifo-path"
+
     local my_pidfile="$_PF_ACID"
     (
+        # Survive parent shell exit (SIGHUP from bash tool calls)
+        trap '' HUP
         local cur_dir="" next_dir="" prev_dir="" gen_pid=""
+        local sf="${_ACID_303_SF:-$CL4UD3_SOUNDFONT}"
 
         # Generate first batch
         cur_dir=$(mktemp -d /tmp/.cl4ud3-acid-XXXXX)
-        python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$cur_dir" --count "$batch_size" >/dev/null 2>&1 || {
-            rm -rf "$cur_dir"; exit 1
+        python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$cur_dir" --measures "$measures" --count "$sections" >/dev/null 2>&1 || {
+            rm -rf "$cur_dir"; rm -f "$acid_fifo"; exit 1
         }
 
-        while [ -f "$my_pidfile" ]; do
+        # Publish note pool for FIFO stabs (in-key sync)
+        [ -f "$cur_dir/notes.txt" ] && cp "$cur_dir/notes.txt" "$_ACID_NOTES_FILE"
+
+        # Start persistent fluidsynth with FIFO input
+        # Reads commands from FIFO — stabs sent here too (channel 1)
+        # nohup protects tail/fluidsynth from SIGHUP when parent shells exit
+        nohup tail -f "$acid_fifo" 2>/dev/null | nohup fluidsynth \
+            -g 4.0 \
+            -o synth.chorus.active=yes -o synth.chorus.depth=3 -o synth.chorus.speed=0.2 \
+            -o synth.reverb.active=yes -o synth.reverb.room-size=0.2 -o synth.reverb.level=0.3 \
+            -o synth.sample-rate=22050 \
+            "$sf" "$cur_dir/loop.mid" >/dev/null 2>&1 &
+        local fs_pid=$!
+
+        # Give fluidsynth time to load
+        sleep 0.3
+
+        # Start playback with infinite loop
+        echo "player_loop -1" > "$acid_fifo"
+        echo "player_start" > "$acid_fifo"
+
+        # Vocal sample trigger — 20% chance every 16 measures (~80 measures avg)
+        local vocals_dir="$CL4UD3_HOME/sounds/acid-vocals"
+        if [ -d "$vocals_dir" ] && ls "$vocals_dir"/*.wav >/dev/null 2>&1; then
+            local section_secs
+            section_secs=$(awk "BEGIN { printf \"%.0f\", 16 * 4 * 60.0 / $bpm }" 2>/dev/null)
+            [ -n "$section_secs" ] || section_secs=32
+            (
+                while [ -f "$my_pidfile" ]; do
+                    sleep "$section_secs" 2>/dev/null || break
+                    # 65% chance per 16-measure section
+                    [ $((RANDOM % 20)) -ge 13 ] && continue
+                    local wav
+                    wav=$(find "$vocals_dir" -maxdepth 1 -name '*.wav' 2>/dev/null | sort -R | head -1)
+                    if [ -n "$wav" ] && [ -f "$wav" ]; then
+                        # shellcheck disable=SC2086
+                        $WAV_PLAYER "$wav" >/dev/null 2>&1 &
+                    fi
+                done
+            ) &
+            local vocal_pid=$!
+        fi
+
+        # Calculate batch duration in seconds
+        local batch_secs
+        batch_secs=$(awk "BEGIN { printf \"%.0f\", $sections * $measures * 4 * 60 / $bpm }" 2>/dev/null)
+        [ -n "$batch_secs" ] || batch_secs=128
+
+        while [ -f "$my_pidfile" ] && kill -0 "$fs_pid" 2>/dev/null; do
             if _acid_is_idle; then
                 break
             fi
@@ -390,53 +457,52 @@ play_acid_loop() {
             _acid_write_beat_file "$bpm"
             echo "$cur_dir" > "$_ACID_DIR_FILE"
 
-            # Play through batch — each loop repeated
-            local i=0
-            for loop_file in "$cur_dir"/loop-*.mid; do
-                [ -f "$loop_file" ] || continue
-                i=$((i + 1))
+            # Pre-generate next batch in background
+            next_dir=$(mktemp -d /tmp/.cl4ud3-acid-XXXXX)
+            python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$next_dir" --measures "$measures" --count "$sections" >/dev/null 2>&1 &
+            gen_pid=$!
 
-                # At midpoint, pre-generate next batch in background
-                if [ "$i" -eq $((batch_size / 2)) ] && [ -z "$gen_pid" ]; then
-                    next_dir=$(mktemp -d /tmp/.cl4ud3-acid-XXXXX)
-                    python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$next_dir" --count "$batch_size" >/dev/null 2>&1 &
-                    gen_pid=$!
-                fi
-
-                # Play with repeats
-                local r
-                for r in $(seq 1 $repeats); do
-                    [ -f "$my_pidfile" ] || break
-                    _acid_is_idle && break 3
-                    _play_midi_blocking "$loop_file"
-                done
+            # Wait for current batch to finish (~128s at 120bpm)
+            # Check every 5s if we should stop
+            local elapsed=0
+            while [ "$elapsed" -lt "$batch_secs" ] && [ -f "$my_pidfile" ]; do
+                sleep 5
+                elapsed=$((elapsed + 5))
+                _acid_touch_activity
+                _acid_is_idle && break 2
             done
 
-            # Wait for next batch if still generating
+            # Wait for next batch
             if [ -n "$gen_pid" ]; then
                 wait "$gen_pid" 2>/dev/null || { rm -rf "$next_dir"; next_dir=""; }
                 gen_pid=""
             fi
 
-            # Swap to next batch
-            [ -n "$prev_dir" ] && rm -rf "$prev_dir"
-            prev_dir="$cur_dir"
+            # Swap: stop player, load next MIDI, restart
+            if [ -n "$next_dir" ] && [ -d "$next_dir" ] && [ -f "$next_dir/loop.mid" ]; then
+                echo "player_stop" > "$acid_fifo"
+                sleep 0.1
+                cp "$next_dir/loop.mid" "$cur_dir/loop.mid"
+                # Refresh note pool for stabs
+                [ -f "$next_dir/notes.txt" ] && cp "$next_dir/notes.txt" "$_ACID_NOTES_FILE"
+                echo "player_start" > "$acid_fifo"
 
-            if [ -n "$next_dir" ] && [ -d "$next_dir" ]; then
-                cur_dir="$next_dir"
+                [ -n "$prev_dir" ] && rm -rf "$prev_dir"
+                prev_dir=""
+                rm -rf "$next_dir"
                 next_dir=""
-            else
-                # No next batch ready — generate fresh
-                cur_dir=$(mktemp -d /tmp/.cl4ud3-acid-XXXXX)
-                python3 "$CL4UD3_HOME/tools/acid-303.py" --bpm "$bpm" --output-dir "$cur_dir" --count "$batch_size" >/dev/null 2>&1 || {
-                    rm -rf "$cur_dir"; break
-                }
             fi
         done
 
-        # Cleanup on exit
+        # Cleanup
+        [ -n "$vocal_pid" ] && { kill "$vocal_pid" 2>/dev/null; wait "$vocal_pid" 2>/dev/null; }
+        echo "quit" > "$acid_fifo" 2>/dev/null || true
         [ -n "$gen_pid" ] && { kill "$gen_pid" 2>/dev/null; wait "$gen_pid" 2>/dev/null; }
+        kill "$fs_pid" 2>/dev/null; wait "$fs_pid" 2>/dev/null
+        pkill -f "tail -f $acid_fifo" 2>/dev/null || true
         [ -n "$prev_dir" ] && rm -rf "$prev_dir"
+        [ -n "$cur_dir" ] && rm -rf "$cur_dir"
+        rm -f "$acid_fifo" "$_ACID_FIFO_PATH_FILE" "$_ACID_NOTES_FILE"
         [ -n "$cur_dir" ] && rm -rf "$cur_dir"
         [ -n "$next_dir" ] && rm -rf "$next_dir"
         rm -f "$my_pidfile" "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE" "$_ACID_ACTIVITY_FILE"
@@ -459,8 +525,10 @@ kill_acid_loop() {
         fi
         rm -f "$_PF_ACID"
     fi
-    rm -f "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE" "$_ACID_ACTIVITY_FILE"
-    # Cleanup any orphaned acid temp dirs
+    rm -f "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE" "$_ACID_ACTIVITY_FILE" "$_ACID_NOTES_FILE" "$_ACID_FIFO_PATH_FILE"
+    # Kill any orphaned tail -f feeding the FIFO
+    pkill -f "tail -f /tmp/.cl4ud3-acid-fifo" 2>/dev/null || true
+    # Cleanup any orphaned acid temp dirs + FIFOs
     rm -rf /tmp/.cl4ud3-acid-* 2>/dev/null || true
     return 0
 }
@@ -504,66 +572,246 @@ _ensure_stab_set() {
     return 0
 }
 
-# Play a random stab — reads from 303 dir if running, else own stab set
-# Beat-synced when 303 running, immediate when standalone
-play_acid_stab_synced() {
-    local bpm="${_ACID_303_BPM:-140}"
+# Calculate wait time to next 16th note on the beat grid
+_acid_calc_beat_sync() {
+    local bpm="$1"
+    [ -f "$_ACID_BEAT_FILE" ] || { echo "0.05"; return; }
+    local beat_start beat_bpm
+    beat_start=$(head -1 "$_ACID_BEAT_FILE" 2>/dev/null | tr -d ' ')
+    beat_bpm=$(tail -1 "$_ACID_BEAT_FILE" 2>/dev/null | tr -d ' ')
+    [ -n "$beat_start" ] && [ -n "$beat_bpm" ] || { echo "0.05"; return; }
 
-    # Find stab dir: prefer global 303, fall back to per-session
+    local now
+    if command -v gdate >/dev/null 2>&1; then
+        now=$(gdate +%s.%N)
+    elif date +%s.%N 2>/dev/null | grep -q '\.'; then
+        now=$(date +%s.%N)
+    else
+        now=$(date +%s)
+    fi
+
+    awk "BEGIN {
+        sixteenth = 60.0 / $beat_bpm / 4;
+        elapsed = $now - $beat_start;
+        beat_pos = elapsed - int(elapsed / sixteenth) * sixteenth;
+        wait = sixteenth - beat_pos;
+        if (wait < 0.01) wait = sixteenth;
+        printf \"%.4f\", wait;
+    }" 2>/dev/null || echo "0.05"
+}
+
+# Read note pool from global file, return as space-separated string
+_acid_read_notes() {
+    if [ -f "$_ACID_NOTES_FILE" ]; then
+        tr '\n' ' ' < "$_ACID_NOTES_FILE" 2>/dev/null
+    else
+        # Fallback: A minor pentatonic across 2 octaves
+        echo "45 48 50 52 55 57 60 62 64 67 69"
+    fi
+}
+
+# Play acid stab via FIFO — sends raw noteon/cc/noteoff to persistent fluidsynth
+# Channel 1 (bass = channel 0), same soundfont + effects chain
+_play_stab_via_fifo() {
+    local fifo="$1"
+    local bpm="$2"
+
+    # Read note pool
+    local notes_str
+    notes_str=$(_acid_read_notes)
+    local notes=($notes_str)
+    local num_notes=${#notes[@]}
+    [ "$num_notes" -eq 0 ] && return
+
+    # Beat-sync wait
+    local wait_time
+    wait_time=$(_acid_calc_beat_sync "$bpm")
+
+    # Pick random note, octave up for stab
+    local ni=$((RANDOM % num_notes))
+    local base_note=${notes[$ni]}
+    local octave_up=$((12 + (RANDOM % 2) * 12))  # +12 or +24
+    local note=$((base_note + octave_up))
+    [ "$note" -gt 96 ] && note=96
+
+    # Pick random 303 program for channel 1
+    local sqr_progs=(50 55 60 65 70 75 80 85)
+    local bass_progs=(0 5 10 15 20 25 30 35 40 45)
+    local prog
+    if [ $((RANDOM % 3)) -lt 2 ]; then
+        prog=${sqr_progs[$((RANDOM % ${#sqr_progs[@]}))]}
+    else
+        prog=${bass_progs[$((RANDOM % ${#bass_progs[@]}))]}
+    fi
+
+    # Pick stab style
+    local style=$((RANDOM % 6))
+
+    # Fire stab in background — timed events via sleep
+    (
+        sleep "$wait_time" 2>/dev/null || true
+
+        # Set up channel 1: program + filter
+        echo "prog 1 $prog" > "$fifo"
+        echo "cc 1 71 127" > "$fifo"
+
+        case $style in
+            0) # squelch hit + dub echo
+                echo "cc 1 74 127" > "$fifo"
+                echo "noteon 1 $note 127" > "$fifo"
+                sleep 0.1; echo "cc 1 74 80" > "$fifo"
+                sleep 0.1; echo "cc 1 74 40" > "$fifo"
+                sleep 0.15; echo "cc 1 74 15" > "$fifo"
+                sleep 0.05; echo "noteoff 1 $note" > "$fifo"
+                local vel=80
+                for _ei in 1 2 3 4 5 6; do
+                    sleep 0.75
+                    [ "$vel" -lt 20 ] && break
+                    local _cc=$((127 - _ei * 20)); [ "$_cc" -lt 20 ] && _cc=20
+                    echo "cc 1 74 $_cc" > "$fifo"
+                    echo "noteon 1 $note $vel" > "$fifo"
+                    sleep 0.25; echo "noteoff 1 $note" > "$fifo"
+                    vel=$((vel * 55 / 100))
+                done
+                ;;
+            1) # acid scream — high + long delay
+                local hn=$((note + 12))
+                [ "$hn" -gt 96 ] && hn=96
+                echo "cc 1 74 127" > "$fifo"
+                echo "noteon 1 $hn 127" > "$fifo"
+                sleep 0.2; echo "cc 1 74 90" > "$fifo"
+                sleep 0.2; echo "cc 1 74 50" > "$fifo"
+                sleep 0.2; echo "cc 1 74 15" > "$fifo"
+                echo "noteoff 1 $hn" > "$fifo"
+                local vel=85
+                for _ei in 1 2 3 4 5 6 7; do
+                    sleep 0.75
+                    [ "$vel" -lt 20 ] && break
+                    echo "cc 1 74 $((127 - _ei * 15))" > "$fifo"
+                    echo "noteon 1 $hn $vel" > "$fifo"
+                    sleep 0.2; echo "noteoff 1 $hn" > "$fifo"
+                    vel=$((vel * 55 / 100))
+                done
+                ;;
+            2) # chromatic slide up
+                echo "cc 1 74 60" > "$fifo"
+                local num=$((4 + RANDOM % 4))
+                for ((si=0; si<num; si++)); do
+                    local sn=$((note + si))
+                    [ "$sn" -gt 96 ] && sn=96
+                    echo "cc 1 74 $((60 + si * 10))" > "$fifo"
+                    echo "noteon 1 $sn 110" > "$fifo"
+                    sleep 0.11; echo "noteoff 1 $sn" > "$fifo"
+                done
+                local last=$((note + num - 1))
+                [ "$last" -gt 96 ] && last=96
+                local vel=65
+                for _ei in 1 2 3 4 5; do
+                    sleep 0.5
+                    [ "$vel" -lt 20 ] && break
+                    echo "noteon 1 $last $vel" > "$fifo"
+                    sleep 0.2; echo "noteoff 1 $last" > "$fifo"
+                    vel=$((vel * 55 / 100))
+                done
+                ;;
+            3) # dub ping — single hit, deep echo
+                echo "cc 1 74 127" > "$fifo"
+                echo "noteon 1 $note 127" > "$fifo"
+                sleep 0.15; echo "noteoff 1 $note" > "$fifo"
+                local vel=95
+                for _ei in 1 2 3 4 5 6 7 8 9 10; do
+                    sleep 0.75
+                    [ "$vel" -lt 20 ] && break
+                    local cc=$((127 - _ei * 10))
+                    [ "$cc" -lt 20 ] && cc=20
+                    echo "cc 1 74 $cc" > "$fifo"
+                    echo "noteon 1 $note $vel" > "$fifo"
+                    sleep 0.15; echo "noteoff 1 $note" > "$fifo"
+                    vel=$((vel * 55 / 100))
+                done
+                ;;
+            4) # stutter — rapid fire
+                echo "cc 1 74 100" > "$fifo"
+                local num=$((8 + RANDOM % 9))
+                for ((si=0; si<num; si++)); do
+                    local v=$((80 + RANDOM % 48))
+                    [ "$v" -gt 127 ] && v=127
+                    echo "cc 1 74 $((30 + RANDOM % 98))" > "$fifo"
+                    echo "noteon 1 $note $v" > "$fifo"
+                    sleep 0.0625; echo "noteoff 1 $note" > "$fifo"
+                done
+                local vel=55
+                for _ei in 1 2 3 4 5; do
+                    sleep 0.5
+                    [ "$vel" -lt 20 ] && break
+                    echo "noteon 1 $note $vel" > "$fifo"
+                    sleep 0.15; echo "noteoff 1 $note" > "$fifo"
+                    vel=$((vel * 55 / 100))
+                done
+                ;;
+            5) # ghost — quiet hit, reverse swell echo
+                echo "cc 1 74 60" > "$fifo"
+                echo "noteon 1 $note 50" > "$fifo"
+                sleep 0.1; echo "noteoff 1 $note" > "$fifo"
+                for _ei in 0 1 2 3 4 5 6 7 8 9; do
+                    sleep 0.5
+                    local v
+                    if [ "$_ei" -lt 4 ]; then
+                        v=$((40 + _ei * 15))
+                    else
+                        v=$((100 - (_ei - 4) * 18))
+                        [ "$v" -lt 15 ] && v=15
+                    fi
+                    echo "cc 1 74 $((40 + _ei * 10))" > "$fifo"
+                    echo "noteon 1 $note $v" > "$fifo"
+                    sleep 0.15; echo "noteoff 1 $note" > "$fifo"
+                done
+                ;;
+        esac
+    ) &
+    disown $! 2>/dev/null || true
+}
+
+# Play a random stab — FIFO injection when acid loop running, else MIDI file fallback
+# FIFO mode: raw events on channel 1, same fluidsynth + effects as bassline
+# Fallback: separate fluidsynth instance with 303 soundfont
+play_acid_stab_synced() {
+    local bpm="${_ACID_303_BPM:-120}"
+
+    # Prefer FIFO injection (same fluidsynth instance as bassline)
+    if [ -f "$_ACID_FIFO_PATH_FILE" ]; then
+        local fifo
+        fifo=$(cat "$_ACID_FIFO_PATH_FILE" 2>/dev/null)
+        if [ -n "$fifo" ] && [ -p "$fifo" ]; then
+            _play_stab_via_fifo "$fifo" "$bpm"
+            return 0
+        fi
+    fi
+
+    # ── Fallback: MIDI file + separate fluidsynth ──
     local stab_dir=""
     if [ -f "$_ACID_DIR_FILE" ]; then
         stab_dir=$(cat "$_ACID_DIR_FILE" 2>/dev/null)
         [ -d "$stab_dir" ] || stab_dir=""
     fi
     if [ -z "$stab_dir" ] || ! ls "$stab_dir"/stab-*.mid >/dev/null 2>&1; then
-        # No 303 running — use/generate per-session stabs
         _ensure_stab_set "$bpm" || return 0
         stab_dir="$_ACID_STAB_DIR"
     fi
 
-    # Pick random stab
     local stab
     stab=$(find "$stab_dir" -maxdepth 1 -name 'stab-*.mid' 2>/dev/null | sort -R | head -1)
     [ -n "$stab" ] && [ -f "$stab" ] || return 0
 
-    # Beat-sync if beat file exists (303 running), else play immediately
-    if [ -f "$_ACID_BEAT_FILE" ]; then
-        local beat_start beat_bpm
-        beat_start=$(head -1 "$_ACID_BEAT_FILE" 2>/dev/null | tr -d ' ')
-        beat_bpm=$(tail -1 "$_ACID_BEAT_FILE" 2>/dev/null | tr -d ' ')
+    # Beat-sync wait then play
+    local wait_time
+    wait_time=$(_acid_calc_beat_sync "$bpm")
 
-        if [ -n "$beat_start" ] && [ -n "$beat_bpm" ]; then
-            local now
-            if command -v gdate >/dev/null 2>&1; then
-                now=$(gdate +%s.%N)
-            elif date +%s.%N 2>/dev/null | grep -q '\.'; then
-                now=$(date +%s.%N)
-            else
-                now=$(date +%s)
-            fi
-
-            local wait_time
-            wait_time=$(awk "BEGIN {
-                sixteenth = 60.0 / $beat_bpm / 4;
-                elapsed = $now - $beat_start;
-                beat_pos = elapsed - int(elapsed / sixteenth) * sixteenth;
-                wait = sixteenth - beat_pos;
-                if (wait < 0.01) wait = sixteenth;
-                printf \"%.4f\", wait;
-            }" 2>/dev/null)
-            [ -n "$wait_time" ] || wait_time="0.05"
-
-            (
-                sleep "$wait_time" 2>/dev/null || true
-                [ -f "$stab" ] && play_midi "$stab"
-            ) &
-            disown $! 2>/dev/null || true
-            return 0
-        fi
-    fi
-
-    # No beat file — play immediately in background
-    [ -f "$stab" ] && play_midi "$stab"
+    (
+        sleep "$wait_time" 2>/dev/null || true
+        [ -f "$stab" ] && _play_midi_blocking "$stab" "${_ACID_303_SF:-}"
+    ) &
+    disown $! 2>/dev/null || true
 }
 
 # Play a WAV file in blocking mode (used by acid loop)
@@ -584,7 +832,8 @@ kill_all_sounds() {
     killall pw-play 2>/dev/null || true
     killall paplay 2>/dev/null || true
     killall aplay 2>/dev/null || true
-    rm -f /tmp/.cl4ud3-cr4ck-sound-pid-* /tmp/.cl4ud3-cr4ck-music-pid-* /tmp/.cl4ud3-cr4ck-timer-pid-* /tmp/.cl4ud3-cr4ck-loading-pid-* /tmp/.cl4ud3-cr4ck-acid-pid /tmp/.cl4ud3-cr4ck-acid-beat /tmp/.cl4ud3-cr4ck-acid-dir
+    pkill -f "tail -f /tmp/.cl4ud3-acid-fifo" 2>/dev/null || true
+    rm -f /tmp/.cl4ud3-cr4ck-sound-pid-* /tmp/.cl4ud3-cr4ck-music-pid-* /tmp/.cl4ud3-cr4ck-timer-pid-* /tmp/.cl4ud3-cr4ck-loading-pid-* /tmp/.cl4ud3-cr4ck-acid-pid /tmp/.cl4ud3-cr4ck-acid-beat /tmp/.cl4ud3-cr4ck-acid-dir /tmp/.cl4ud3-acid-notes /tmp/.cl4ud3-acid-fifo-path
     rm -rf /tmp/.cl4ud3-acid-* /tmp/.cl4ud3-cr4ck-acid-stabs-* 2>/dev/null || true
     return 0
 }

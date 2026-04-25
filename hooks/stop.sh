@@ -53,16 +53,21 @@ if [ -f "$LOCKFILE" ]; then
 fi
 touch "$LOCKFILE"
 
-if [ "$CL4UD3_GLITCH_SOUNDS" != "false" ] && [ "$CL4UD3_SOUNDS_ENABLED" != "false" ]; then
-    play_random_from_dir "$CL4UD3_HOME/sounds/glitches"
-fi
-
 # 🍄
+_acid_is_on=false
 if [ -f "$CL4UD3_HOME/hooks/acid-mode.sh" ]; then
     source "$CL4UD3_HOME/hooks/acid-mode.sh"
     if _is_acid_active; then
+        _acid_is_on=true
         _acid_effect
         _acid_random_stab
+    fi
+fi
+
+# Normal glitch sound — skip if acid mode replaces it
+if ! $_acid_is_on || [ "$_ACID_REPLACE_SOUNDS" != "true" ]; then
+    if [ "$CL4UD3_GLITCH_SOUNDS" != "false" ] && [ "$CL4UD3_SOUNDS_ENABLED" != "false" ]; then
+        play_random_from_dir "$CL4UD3_HOME/sounds/glitches"
     fi
 fi
 

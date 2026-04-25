@@ -54,7 +54,8 @@ CL4UD3_TOOL_COOLDOWN="${CL4UD3_TOOL_COOLDOWN:-10}"      # between modem sounds o
 CL4UD3_ACID_MODE="${CL4UD3_ACID_MODE:-false}"
 _ACID_303_ENABLED="${_ACID_303_ENABLED:-false}"
 _ACID_STABS_ENABLED="${_ACID_STABS_ENABLED:-true}"
-_ACID_303_BPM="${_ACID_303_BPM:-140}"
+_ACID_303_BPM="${_ACID_303_BPM:-120}"
+_ACID_303_SF="$HOME/.cl4ud3-cr4ck/sounds/HS TB-303.SF2"
 
 # Master kill switch — overrides everything above
 CL4UD3_SOUNDS_ENABLED="${CL4UD3_SOUNDS_ENABLED:-true}"

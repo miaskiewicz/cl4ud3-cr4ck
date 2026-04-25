@@ -35,6 +35,14 @@ touch "$LOCKFILE"
 
 if [ "$CL4UD3_MODEM_SOUNDS" != "false" ] && [ "$CL4UD3_SOUNDS_ENABLED" != "false" ]; then
     play_random_from_dir "$CL4UD3_HOME/sounds/modem"
+    # 🍄 acid mode: sometimes layer distorted robo-acid voice over modem sound
+    if [ -f "$CL4UD3_HOME/hooks/acid-mode.sh" ]; then
+        source "$CL4UD3_HOME/hooks/acid-mode.sh"
+        if _is_acid_active && [ $((RANDOM % 16)) -eq 0 ]; then
+            ROBO_WAV=$(find "$CL4UD3_HOME/sounds/acid-vocals" -maxdepth 1 -name 'robo-acid*.wav' 2>/dev/null | sort -R | head -1)
+            [ -n "$ROBO_WAV" ] && [ -f "$ROBO_WAV" ] && play_audio "$ROBO_WAV"
+        fi
+    fi
 fi
 
 # 🍄

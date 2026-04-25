@@ -130,18 +130,18 @@ teardown() {
     assert_success
 }
 
-@test "acid-mode.sh: _ACID_303_BPM defaults to 140" {
-    run grep '_ACID_303_BPM.*:-140' "$CL4UD3_HOME/hooks/acid-mode.sh"
+@test "acid-mode.sh: _ACID_303_BPM defaults to 120" {
+    run grep '_ACID_303_BPM.*:-120' "$CL4UD3_HOME/hooks/acid-mode.sh"
     assert_success
 }
 
-@test "acid-mode.sh: _ACID_STAB_CHANCE defaults to 0.8" {
-    run grep '_ACID_STAB_CHANCE.*:-0.8' "$CL4UD3_HOME/hooks/acid-mode.sh"
+@test "acid-mode.sh: _ACID_STAB_CHANCE defaults to 0.95" {
+    run grep '_ACID_STAB_CHANCE.*:-0.95' "$CL4UD3_HOME/hooks/acid-mode.sh"
     assert_success
 }
 
-@test "acid-mode.sh: _ACID_STAB_RANDOM_CHANCE defaults to 0.3" {
-    run grep '_ACID_STAB_RANDOM_CHANCE.*:-0.3' "$CL4UD3_HOME/hooks/acid-mode.sh"
+@test "acid-mode.sh: _ACID_STAB_RANDOM_CHANCE defaults to 0.6" {
+    run grep '_ACID_STAB_RANDOM_CHANCE.*:-0.6' "$CL4UD3_HOME/hooks/acid-mode.sh"
     assert_success
 }
 
@@ -154,9 +154,9 @@ teardown() {
     source "$CL4UD3_HOME/hooks/acid-mode.sh"
     [ "$_ACID_303_ENABLED" = "false" ]
     [ "$_ACID_STABS_ENABLED" = "true" ]
-    [ "$_ACID_303_BPM" = "140" ]
-    [ "$_ACID_STAB_CHANCE" = "0.8" ]
-    [ "$_ACID_STAB_RANDOM_CHANCE" = "0.3" ]
+    [ "$_ACID_303_BPM" = "120" ]
+    [ "$_ACID_STAB_CHANCE" = "0.95" ]
+    [ "$_ACID_STAB_RANDOM_CHANCE" = "0.6" ]
     [ "$_ACID_IDLE_TIMEOUT" = "30" ]
 }
 
@@ -586,19 +586,19 @@ teardown() {
 }
 
 @test "play-midi.sh: play_acid_loop writes beat file" {
-    run grep -A60 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    run grep -A70 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial '_acid_write_beat_file'
 }
 
 @test "play-midi.sh: play_acid_loop writes dir file" {
-    run grep -A60 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    run grep -A70 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial '_ACID_DIR_FILE'
 }
 
 @test "play-midi.sh: play_acid_loop plays loop.mid blocking" {
     run grep -A60 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    assert_output --partial "loop-*.mid"
-    assert_output --partial '_play_midi_blocking'
+    assert_output --partial "loop.mid"
+    assert_output --partial 'fluidsynth'
 }
 
 @test "play-midi.sh: play_acid_loop cleans up dirs on exit" {
@@ -612,7 +612,7 @@ teardown() {
 }
 
 @test "play-midi.sh: play_acid_loop disowns background process" {
-    run grep -A95 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    run grep -A120 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial "disown"
 }
 
@@ -629,14 +629,15 @@ teardown() {
 
 @test "play-midi.sh: play_acid_loop generates batch of patterns" {
     run grep -A80 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    assert_output --partial "batch_size"
+    assert_output --partial "sections"
+    assert_output --partial "--measures"
     assert_output --partial "--count"
     assert_output --partial "acid-303.py"
 }
 
-@test "play-midi.sh: play_acid_loop pre-generates next batch at midpoint" {
+@test "play-midi.sh: play_acid_loop pre-generates next batch during playback" {
     run grep -A80 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    assert_output --partial "midpoint"
+    assert_output --partial "background"
     assert_output --partial "next_dir"
     assert_output --partial "gen_pid"
 }
@@ -646,9 +647,9 @@ teardown() {
     assert_output --partial '--bpm "$bpm"'
 }
 
-@test "play-midi.sh: play_acid_loop defaults bpm to 140" {
+@test "play-midi.sh: play_acid_loop defaults bpm to 120" {
     run grep -A2 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    assert_output --partial ':-140'
+    assert_output --partial ':-120'
 }
 
 # ══════���═══════════════════════════════════════════════════════════════���════════
@@ -785,7 +786,7 @@ teardown() {
 }
 
 @test "play-midi.sh: _play_midi_blocking supports fluidsynth" {
-    run grep -A10 '_play_midi_blocking()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    run grep -A25 '_play_midi_blocking()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial 'fluidsynth'
 }
 
@@ -1177,25 +1178,25 @@ print('ok')
 # acid-303.py — Stab Generation
 # ══════════════════════════���═════════════════════════════════���══════════════════
 
-@test "acid-303.py: has 8 stab generator functions" {
+@test "acid-303.py: has 8 stab generator functions plus helper" {
     run grep 'def _stab_' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
     assert_success
     local count
     count=$(echo "$output" | wc -l | tr -d ' ')
-    [ "$count" -eq 8 ]
+    [ "$count" -eq 9 ]  # 8 generators + _stab_add_echo helper
 }
 
 @test "acid-303.py: STAB_GENERATORS list has 8 entries" {
     run grep -A12 'STAB_GENERATORS' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
     assert_success
-    assert_output --partial "_stab_filter_sweep"
-    assert_output --partial "_stab_tritone"
-    assert_output --partial "_stab_arp"
-    assert_output --partial "_stab_chromatic"
-    assert_output --partial "_stab_dub_chord"
+    assert_output --partial "_stab_squelch_hit"
+    assert_output --partial "_stab_acid_scream"
+    assert_output --partial "_stab_slide_up"
+    assert_output --partial "_stab_slide_down"
+    assert_output --partial "_stab_dub_ping"
     assert_output --partial "_stab_tape_echo"
-    assert_output --partial "_stab_granular"
-    assert_output --partial "_stab_metallic"
+    assert_output --partial "_stab_stutter"
+    assert_output --partial "_stab_ghost"
 }
 
 @test "acid-303.py: stab generators write MIDI notes" {
@@ -1239,7 +1240,7 @@ midi = MIDIFile(1, deinterleave=False)
 midi.addTempo(0, 0, 140)
 midi.addProgramChange(0, 0, 0, 38)
 notes = [45, 48, 50, 52, 57]
-beats = m._write_bassline(midi, 0, 0, notes, bpm=140, target_duration=3)
+beats = m._write_bassline(midi, 0, 0, notes, bpm=140, measures=4, start_beat=0.0)
 assert beats > 0, f'expected positive beats, got {beats}'
 print('ok')
 "
@@ -1257,7 +1258,7 @@ import sys, tempfile; sys.path.insert(0, '$BATS_TEST_DIRNAME/../tools')
 from importlib.machinery import SourceFileLoader
 m = SourceFileLoader('acid303', '$BATS_TEST_DIRNAME/../tools/acid-303.py').load_module()
 d = tempfile.mkdtemp()
-key = m.generate(140, d, target_duration=3)
+key = m.generate(140, d, measures=4)
 assert key in ('Am', 'Dm', 'Gm', 'Cm', 'Em'), f'unexpected key: {key}'
 import shutil; shutil.rmtree(d)
 print('ok')
@@ -1267,13 +1268,13 @@ print('ok')
 }
 
 @test "acid-303.py: generate() sets MIDI program and CCs for bass" {
-    run grep -A20 'def generate(' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
-    assert_output --partial "BASS_PROGRAM"
+    run grep -A25 'def generate(' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_output --partial "beat_pos"
     assert_output --partial "_write_bassline"
 }
 
 @test "acid-303.py: generate() writes loop.mid and stab MIDIs" {
-    run grep -A35 'def generate(' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    run grep -A45 'def generate(' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
     assert_output --partial "loop.mid"
     assert_output --partial "stab-"
 }
@@ -1294,8 +1295,8 @@ print('ok')
     assert_output --partial "--count"
     assert_output --partial "_acid_write_beat_file"
     assert_output --partial "_ACID_DIR_FILE"
-    assert_output --partial "loop-*.mid"
-    assert_output --partial "_play_midi_blocking"
+    assert_output --partial "loop.mid"
+    assert_output --partial "fluidsynth"
     assert_output --partial "next_dir"
 }
 
@@ -1401,9 +1402,9 @@ print('ok')
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @test "play-midi.sh: acid loop cleans up dirs on exit" {
-    run grep -A90 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    run grep -A115 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial "prev_dir"
-    assert_output --partial "Cleanup on exit"
+    assert_output --partial "Cleanup"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1491,7 +1492,7 @@ print('ok')
 }
 
 @test "play-midi.sh: acid loop cleans up on idle exit" {
-    run grep -A5 'Cleanup on exit' "$CL4UD3_HOME/hooks/play-midi.sh"
+    run grep -A10 '# Cleanup' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial "_ACID_ACTIVITY_FILE"
 }
 
@@ -1570,10 +1571,10 @@ print('ok')
     assert_output --partial "_ACID_STAB_DIR"
 }
 
-@test "integration: stab falls back to immediate play without beat file" {
-    run grep -A70 'play_acid_stab_synced()' "$CL4UD3_HOME/hooks/play-midi.sh"
-    assert_output --partial "No beat file"
-    assert_output --partial "play immediately"
+@test "integration: stab falls back to MIDI file playback without FIFO" {
+    run grep -A40 'play_acid_stab_synced()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "Fallback"
+    assert_output --partial "_play_midi_blocking"
 }
 
 @test "integration: cleanup_all_stale_files checks global acid pid" {
@@ -1584,4 +1585,332 @@ print('ok')
 @test "integration: kill_all_sounds cleans per-session stab dirs" {
     run grep -A10 'kill_all_sounds()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial "cl4ud3-cr4ck-acid-stabs"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TB-303 Soundfont + Distortion
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "config.sh: _ACID_303_SF defined" {
+    run grep '_ACID_303_SF' "$CL4UD3_HOME/config.sh"
+    assert_success
+    assert_output --partial "HS TB-303.SF2"
+}
+
+@test "config.sh: _ACID_303_BPM defaults to 120" {
+    run grep '_ACID_303_BPM' "$CL4UD3_HOME/config.sh"
+    assert_success
+    assert_output --partial "120"
+}
+
+@test "play-midi.sh: _play_midi_blocking accepts soundfont override" {
+    run grep -A5 '_play_midi_blocking()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "sf_override"
+}
+
+@test "play-midi.sh: acid mode uses gain and chorus" {
+    run grep -A15 '_play_midi_blocking()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "fs_extra"
+    assert_output --partial "synth.chorus"
+    assert_output --partial "synth.reverb"
+}
+
+@test "play-midi.sh: acid fluidsynth uses 22050 sample rate for bitcrush" {
+    run grep 'synth.sample-rate' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_success
+    assert_output --partial "22050"
+}
+
+@test "play-midi.sh: acid loop passes 303 soundfont to blocking player" {
+    run grep '_play_midi_blocking.*_ACID_303_SF' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_success
+}
+
+@test "play-midi.sh: stab playback uses 303 soundfont" {
+    run grep -A70 'play_acid_stab_synced()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "_ACID_303_SF"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Trippy Stab Generators (no chords, single note, dub echo)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "acid-303.py: TB303 program constants defined" {
+    run grep -A2 'TB303_BASS_PROGRAMS' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_success
+    assert_output --partial "TB-BASS"
+}
+
+@test "acid-303.py: TB303_SQR_PROGRAMS defined" {
+    run grep 'TB303_SQR_PROGRAMS' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_success
+    assert_output --partial "TB303 SQR"
+}
+
+@test "acid-303.py: _stab_add_echo helper exists" {
+    run grep 'def _stab_add_echo' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_success
+}
+
+@test "acid-303.py: stab generators use TB303 programs" {
+    run grep -c 'TB303_SQR_PROGRAMS\|TB303_BASS_PROGRAMS' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_success
+    # Should appear in multiple stab generators
+    [ "${output}" -ge 8 ]
+}
+
+@test "acid-303.py: stabs use octave up (+12 or +24)" {
+    run grep -c '+ 12\|+ 24' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_success
+    [ "${output}" -ge 5 ]
+}
+
+@test "acid-303.py: stabs use CC74 filter sweeps" {
+    run grep -c 'addControllerEvent.*74' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_success
+    [ "${output}" -ge 10 ]
+}
+
+@test "acid-303.py: stab generators list updated" {
+    run grep -A10 'STAB_GENERATORS' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_output --partial "_stab_squelch_hit"
+    assert_output --partial "_stab_acid_scream"
+    assert_output --partial "_stab_dub_ping"
+    assert_output --partial "_stab_ghost"
+}
+
+@test "acid-303.py: no polyphonic chords in stabs" {
+    # No stab should use random.sample on note_pool (chord picking)
+    # Stabs should be single hits or sequential notes with random.choice
+    local count
+    count=$(grep -c 'random.sample.*note_pool' "$BATS_TEST_DIRNAME/../tools/acid-303.py" || true)
+    [ "$count" -le 1 ]
+}
+
+@test "acid-303.py: _stab_add_echo adds decaying velocity" {
+    run grep -A10 'def _stab_add_echo' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_output --partial "vel < 20"
+    assert_output --partial "0.55"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Acid Sound Replacement
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "acid-mode.sh: _ACID_REPLACE_SOUNDS config param exists" {
+    run grep '_ACID_REPLACE_SOUNDS' "$CL4UD3_HOME/hooks/acid-mode.sh"
+    assert_success
+}
+
+@test "acid-mode.sh: stab chances increased" {
+    run grep '_ACID_STAB_CHANCE' "$CL4UD3_HOME/hooks/acid-mode.sh"
+    assert_success
+    assert_output --partial "0.95"
+}
+
+@test "acid-mode.sh: random stab chance increased" {
+    run grep '_ACID_STAB_RANDOM_CHANCE' "$CL4UD3_HOME/hooks/acid-mode.sh"
+    assert_success
+    assert_output --partial "0.6"
+}
+
+@test "stop.sh: acid mode can replace glitch sounds" {
+    run grep -A5 '_ACID_REPLACE_SOUNDS' "$BATS_TEST_DIRNAME/../hooks/stop.sh"
+    assert_success
+}
+
+@test "post-tool-use.sh: modem sounds always play (not replaced)" {
+    # Modem sounds should play regardless of acid mode
+    run grep -B2 'play_random_from_dir.*modem' "$BATS_TEST_DIRNAME/../hooks/post-tool-use.sh"
+    assert_success
+    # Should NOT be inside acid replacement conditional
+    refute_output --partial "_ACID_REPLACE_SOUNDS"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Filter Envelope + Drive
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "acid-303.py: filter envelope uses steeper decay curve" {
+    run grep -A12 'def _write_filter_envelope' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_output --partial "0.4"
+}
+
+@test "acid-303.py: accent filter starts at 127" {
+    run grep -A5 'def _write_filter_envelope' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_output --partial "127, 15, 8"
+}
+
+@test "acid-303.py: expression surge on accented notes" {
+    run grep -A20 'def _write_filter_envelope' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_output --partial ", 11, 127"
+}
+
+@test "acid-303.py: max resonance CC71=127" {
+    run grep 'addControllerEvent.*71.*127' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_success
+}
+
+@test "acid-303.py: velocity cranked up for grit" {
+    run grep -A2 'velocity.*accent' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_output --partial "127"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FIFO Stab Integration — same fluidsynth instance as bassline
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@test "play-midi.sh: defines _ACID_FIFO_PATH_FILE" {
+    run grep '_ACID_FIFO_PATH_FILE' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_success
+    assert_output --partial "cl4ud3-acid-fifo-path"
+}
+
+@test "play-midi.sh: defines _ACID_NOTES_FILE" {
+    run grep '_ACID_NOTES_FILE' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_success
+    assert_output --partial "cl4ud3-acid-notes"
+}
+
+@test "play-midi.sh: defines _play_stab_via_fifo function" {
+    run grep '_play_stab_via_fifo()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_success
+}
+
+@test "play-midi.sh: defines _acid_calc_beat_sync function" {
+    run grep '_acid_calc_beat_sync()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_success
+}
+
+@test "play-midi.sh: defines _acid_read_notes function" {
+    run grep '_acid_read_notes()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_success
+}
+
+@test "play-midi.sh: FIFO stab uses channel 1 (bass=ch0)" {
+    run grep -c 'noteon 1\|noteoff 1\|cc 1\|prog 1' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_success
+    # Many FIFO commands use channel 1
+    [ "${output}" -ge 10 ]
+}
+
+@test "play-midi.sh: FIFO stab has 6 stab styles" {
+    run grep -c 'style in' "$CL4UD3_HOME/hooks/play-midi.sh"
+    # case $style covers 0-5
+    local count
+    count=$(grep -c '^\s*[0-5])' "$CL4UD3_HOME/hooks/play-midi.sh" || true)
+    [ "$count" -ge 6 ]
+}
+
+@test "play-midi.sh: FIFO stab reads note pool from file" {
+    run grep -A10 '_acid_read_notes()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "_ACID_NOTES_FILE"
+}
+
+@test "play-midi.sh: _acid_read_notes has A minor fallback" {
+    run grep -A10 '_acid_read_notes()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "Fallback"
+    assert_output --partial "45 48 50 52 55"
+}
+
+@test "play-midi.sh: play_acid_stab_synced prefers FIFO injection" {
+    run grep -A15 'play_acid_stab_synced()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "_ACID_FIFO_PATH_FILE"
+    assert_output --partial "_play_stab_via_fifo"
+}
+
+@test "play-midi.sh: FIFO stab uses 303 programs" {
+    run grep -A10 '_play_stab_via_fifo()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_success
+    # Uses TB303 SQR programs (50-85) and BASS programs (0-45)
+    run grep 'sqr_progs\|bass_progs' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_success
+}
+
+@test "play-midi.sh: FIFO stab has dub echo delays" {
+    # Multiple sleep-based echo patterns in stab styles
+    local count
+    count=$(grep -c 'sleep 0.75\|sleep 0.5' "$CL4UD3_HOME/hooks/play-midi.sh" || true)
+    [ "$count" -ge 4 ]
+}
+
+@test "play-midi.sh: FIFO stab sets CC74 filter" {
+    local count
+    count=$(grep -c 'cc 1 74' "$CL4UD3_HOME/hooks/play-midi.sh" || true)
+    [ "$count" -ge 5 ]
+}
+
+@test "play-midi.sh: FIFO stab sets CC71 resonance" {
+    run grep 'cc 1 71 127' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_success
+}
+
+@test "play-midi.sh: FIFO stab octave up (+12/+24)" {
+    run grep -A30 '_play_stab_via_fifo()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "octave_up"
+    assert_output --partial "12"
+}
+
+@test "play-midi.sh: acid loop publishes notes.txt" {
+    run grep -A120 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "notes.txt"
+    assert_output --partial "_ACID_NOTES_FILE"
+}
+
+@test "play-midi.sh: acid loop creates FIFO pipe" {
+    run grep -A120 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "mkfifo"
+    assert_output --partial "acid_fifo"
+}
+
+@test "play-midi.sh: acid loop writes FIFO path file" {
+    run grep -A120 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "cl4ud3-acid-fifo-path"
+}
+
+@test "play-midi.sh: acid loop uses persistent fluidsynth" {
+    run grep -A120 'play_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "tail -f"
+    assert_output --partial "fluidsynth"
+    assert_output --partial "player_loop"
+    assert_output --partial "player_start"
+}
+
+@test "play-midi.sh: kill_acid_loop cleans FIFO files" {
+    run grep -A15 'kill_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "_ACID_NOTES_FILE"
+    assert_output --partial "_ACID_FIFO_PATH_FILE"
+}
+
+@test "play-midi.sh: kill_acid_loop kills orphaned tail" {
+    run grep -A15 'kill_acid_loop()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial 'pkill -f "tail -f'
+}
+
+@test "play-midi.sh: kill_all_sounds cleans FIFO files" {
+    run grep -A15 'kill_all_sounds()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    assert_output --partial "acid-fifo-path"
+    assert_output --partial "acid-notes"
+}
+
+@test "acid-303.py: generate writes notes.txt" {
+    run grep -A5 'notes.txt' "$BATS_TEST_DIRNAME/../tools/acid-303.py"
+    assert_success
+    assert_output --partial "note_pool"
+}
+
+@test "acid-303.py: notes.txt contains note pool" {
+    local tmpdir
+    tmpdir=$(mktemp -d /tmp/.cl4ud3-acid-test-XXXXX)
+    run python3 "$BATS_TEST_DIRNAME/../tools/acid-303.py" --bpm 120 --output-dir "$tmpdir" --measures 4 --count 1
+    assert_success
+    # notes.txt should exist with MIDI note numbers
+    [ -f "$tmpdir/notes.txt" ]
+    local count
+    count=$(wc -l < "$tmpdir/notes.txt" | tr -d ' ')
+    [ "$count" -ge 5 ]  # at least 5 notes in pool
+    # All lines should be numbers
+    run grep -v '^[0-9]*$' "$tmpdir/notes.txt"
+    assert_failure  # no non-numeric lines
+    rm -rf "$tmpdir"
 }
