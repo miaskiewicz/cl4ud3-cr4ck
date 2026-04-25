@@ -855,15 +855,17 @@ _play_pad_via_fifo() {
 
     # Fire pad in background — sustained chord
     (
-        # Set up channel 2: program + crunchy settings
+        # Set up channel 2: program + Amiga tracker crunch
         echo "prog 2 $prog" > "$fifo"
-        echo "cc 2 71 110" > "$fifo"   # resonance — pushed for crunch
+        echo "cc 2 7 76" > "$fifo"     # channel volume — 60%, pad sits behind bass
+        echo "cc 2 71 127" > "$fifo"   # resonance — max squelch, Amiga nasty
         echo "cc 2 74 95" > "$fifo"    # filter — wide open, let harmonics through
-        echo "cc 2 11 120" > "$fifo"   # expression — drive hard into bitcrush
+        echo "cc 2 11 127" > "$fifo"   # expression — max overdrive into bitcrush
         echo "cc 2 91 127" > "$fifo"   # reverb send — max, big wash
         echo "cc 2 93 80" > "$fifo"    # chorus send — thicken
+        echo "cc 2 1 40" > "$fifo"     # mod wheel — subtle wobble, tracker style
 
-        # Note on — all chord notes, hot velocity for crunch
+        # Note on — hot velocity drives distortion character
         for n in "${chord_notes[@]}"; do
             echo "noteon 2 $n 110" > "$fifo"
         done

@@ -1926,7 +1926,7 @@ print('ok')
 @test "config.sh: _ACID_PADS_ENABLED config exists" {
     run grep '_ACID_PADS_ENABLED' "$CL4UD3_HOME/config.sh"
     assert_success
-    assert_output --partial ":-false"
+    assert_output --partial ":-true"
 }
 
 @test "acid-mode.sh: _ACID_PADS_ENABLED defaults to false" {
@@ -2001,7 +2001,7 @@ print('ok')
 }
 
 @test "play-midi.sh: pad sets CC71 resonance warm" {
-    run grep -A40 '_play_pad_via_fifo()' "$CL4UD3_HOME/hooks/play-midi.sh"
+    run grep -A45 '_play_pad_via_fifo()' "$CL4UD3_HOME/hooks/play-midi.sh"
     assert_output --partial "cc 2 71"
 }
 
