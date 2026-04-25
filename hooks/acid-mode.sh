@@ -11,6 +11,7 @@ _ACID_303_BPM="${_ACID_303_BPM:-120}"
 _ACID_STAB_CHANCE="${_ACID_STAB_CHANCE:-0.95}"
 _ACID_STAB_RANDOM_CHANCE="${_ACID_STAB_RANDOM_CHANCE:-0.6}"
 _ACID_IDLE_TIMEOUT="${_ACID_IDLE_TIMEOUT:-30}"
+_ACID_PADS_ENABLED="${_ACID_PADS_ENABLED:-false}"
 _ACID_REPLACE_SOUNDS="${_ACID_REPLACE_SOUNDS:-false}"
 
 # Rainbow palette — full spectrum cycle
@@ -220,5 +221,18 @@ _acid_toggle_stabs() {
         _ACID_STABS_ENABLED="true"
         export _ACID_STABS_ENABLED
         echo "stabs: ON"
+    fi
+}
+
+# Toggle pads on/off
+_acid_toggle_pads() {
+    if [ "$_ACID_PADS_ENABLED" = "true" ]; then
+        _ACID_PADS_ENABLED="false"
+        export _ACID_PADS_ENABLED
+        echo "pads: OFF"
+    else
+        _ACID_PADS_ENABLED="true"
+        export _ACID_PADS_ENABLED
+        echo "pads: ON"
     fi
 }

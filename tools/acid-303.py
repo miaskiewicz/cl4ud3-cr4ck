@@ -35,6 +35,18 @@ LEAD_PROGRAM = 81     # Lead 2 (sawtooth)
 PAD_PROGRAM = 89      # Pad 2 (warm)
 SQUARE_PROGRAM = 80   # Lead 1 (square)
 
+# Pad chord types — diatonic triads + color chords (Amiga jungle style)
+# Each chord = list of intervals from root
+CHORD_TYPES = [
+    [0, 7],           # power chord (root + 5th)
+    [0, 3, 7],        # minor triad
+    [0, 5, 7],        # sus4
+    [0, 2, 7],        # sus2
+    [0, 3, 7, 10],    # minor 7th
+    [0, 3, 10],       # minor 7th (no 5th) — thin + dark
+    [0, 7, 12],       # octave power chord
+]
+
 
 def _pick_key():
     """Pick random key/scale, return (name, root_midi, midi_note_pool)."""
@@ -46,6 +58,54 @@ def _pick_key():
             if 30 <= midi <= 80:
                 notes.append(midi)
     return name, root_midi, sorted(set(notes))
+
+
+# ── Chord Progression Generation ─────────────────────────────────────────────
+
+def _generate_chord_progression(note_pool, root_midi):
+    """Build 4-8 diatonic chords for dark pad layer.
+
+    Chords use scale tones from note_pool, transposed to octave 3-4 range
+    (MIDI 48-72) for warm pad register. Returns list of chords, each chord
+    a list of 2-3 MIDI notes.
+    """
+    # Filter note pool to pad range (octave 3-4)
+    pad_notes = [n for n in note_pool if 48 <= n <= 72]
+    if not pad_notes:
+        # Transpose root into range
+        r = root_midi
+        while r < 48:
+            r += 12
+        while r > 60:
+            r -= 12
+        pad_notes = [r, r + 3, r + 7]
+
+    num_chords = random.randint(4, 8)
+    chords = []
+
+    for _ in range(num_chords):
+        # Pick a root from pad-range scale tones
+        root = random.choice(pad_notes)
+        chord_type = random.choice(CHORD_TYPES)
+
+        # Build chord, snap to scale where possible
+        chord = []
+        for interval in chord_type:
+            note = root + interval
+            # Keep in pad range — drop octave if too high
+            if note > 72:
+                note -= 12
+            if note < 48:
+                note += 12
+            chord.append(note)
+
+        # Limit to 2-3 notes for that crisp tracker sound
+        if len(chord) > 3:
+            chord = chord[:3]
+
+        chords.append(sorted(set(chord)))
+
+    return chords
 
 
 # ── 303 Pattern Generation ───────────────────────────────────────────────────
@@ -377,6 +437,12 @@ def generate(bpm, output_dir, measures=16, count=1):
     with open(os.path.join(output_dir, "notes.txt"), "w") as f:
         for n in note_pool:
             f.write(f"{n}\n")
+
+    # Write chord progression for pad layer (bash reads this for FIFO pad injection)
+    chord_prog = _generate_chord_progression(note_pool, root_midi)
+    with open(os.path.join(output_dir, "chords.txt"), "w") as f:
+        for chord in chord_prog:
+            f.write(" ".join(str(n) for n in chord) + "\n")
 
     # ── Stab MIDIs ──
     for i, gen_func in enumerate(STAB_GENERATORS):

@@ -31,6 +31,7 @@ _ACID_DIR_FILE="/tmp/.cl4ud3-cr4ck-acid-dir"
 _ACID_ACTIVITY_FILE="/tmp/.cl4ud3-cr4ck-acid-activity"
 _ACID_STAB_DIR="/tmp/.cl4ud3-cr4ck-acid-stabs-$CL4UD3_SID"
 _ACID_NOTES_FILE="/tmp/.cl4ud3-acid-notes"
+_ACID_CHORDS_FILE="/tmp/.cl4ud3-acid-chords"
 _ACID_FIFO_PATH_FILE="/tmp/.cl4ud3-acid-fifo-path"
 
 # Touch activity file — called from hooks to signal tool use
@@ -402,6 +403,8 @@ play_acid_loop() {
 
         # Publish note pool for FIFO stabs (in-key sync)
         [ -f "$cur_dir/notes.txt" ] && cp "$cur_dir/notes.txt" "$_ACID_NOTES_FILE"
+        # Publish chord progression for pad layer
+        [ -f "$cur_dir/chords.txt" ] && cp "$cur_dir/chords.txt" "$_ACID_CHORDS_FILE"
 
         # Start persistent fluidsynth with FIFO input
         # Reads commands from FIFO — stabs sent here too (channel 1)
@@ -441,6 +444,27 @@ play_acid_loop() {
                 done
             ) &
             local vocal_pid=$!
+        fi
+
+        # Dark pad chord trigger — sustained chords every 2-4 measures
+        local pad_pid=""
+        if [ "$_ACID_PADS_ENABLED" = "true" ] && [ -f "$_ACID_CHORDS_FILE" ]; then
+            local measure_secs
+            measure_secs=$(awk "BEGIN { printf \"%.0f\", 4 * 60.0 / $bpm }" 2>/dev/null)
+            [ -n "$measure_secs" ] || measure_secs=2
+            (
+                while [ -f "$my_pidfile" ]; do
+                    # Wait 2-4 measures between chords
+                    local wait_measures=$((2 + RANDOM % 3))
+                    sleep $((wait_measures * measure_secs)) 2>/dev/null || break
+                    [ -f "$my_pidfile" ] || break
+                    # Play pad chord via FIFO
+                    if [ -p "$acid_fifo" ]; then
+                        _play_pad_via_fifo "$acid_fifo" "$bpm"
+                    fi
+                done
+            ) &
+            pad_pid=$!
         fi
 
         # Calculate batch duration in seconds
@@ -483,8 +507,9 @@ play_acid_loop() {
                 echo "player_stop" > "$acid_fifo"
                 sleep 0.1
                 cp "$next_dir/loop.mid" "$cur_dir/loop.mid"
-                # Refresh note pool for stabs
+                # Refresh note pool for stabs + chords for pads
                 [ -f "$next_dir/notes.txt" ] && cp "$next_dir/notes.txt" "$_ACID_NOTES_FILE"
+                [ -f "$next_dir/chords.txt" ] && cp "$next_dir/chords.txt" "$_ACID_CHORDS_FILE"
                 echo "player_start" > "$acid_fifo"
 
                 [ -n "$prev_dir" ] && rm -rf "$prev_dir"
@@ -496,13 +521,14 @@ play_acid_loop() {
 
         # Cleanup
         [ -n "$vocal_pid" ] && { kill "$vocal_pid" 2>/dev/null; wait "$vocal_pid" 2>/dev/null; }
+        [ -n "$pad_pid" ] && { kill "$pad_pid" 2>/dev/null; wait "$pad_pid" 2>/dev/null; }
         echo "quit" > "$acid_fifo" 2>/dev/null || true
         [ -n "$gen_pid" ] && { kill "$gen_pid" 2>/dev/null; wait "$gen_pid" 2>/dev/null; }
         kill "$fs_pid" 2>/dev/null; wait "$fs_pid" 2>/dev/null
         pkill -f "tail -f $acid_fifo" 2>/dev/null || true
         [ -n "$prev_dir" ] && rm -rf "$prev_dir"
         [ -n "$cur_dir" ] && rm -rf "$cur_dir"
-        rm -f "$acid_fifo" "$_ACID_FIFO_PATH_FILE" "$_ACID_NOTES_FILE"
+        rm -f "$acid_fifo" "$_ACID_FIFO_PATH_FILE" "$_ACID_NOTES_FILE" "$_ACID_CHORDS_FILE"
         [ -n "$cur_dir" ] && rm -rf "$cur_dir"
         [ -n "$next_dir" ] && rm -rf "$next_dir"
         rm -f "$my_pidfile" "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE" "$_ACID_ACTIVITY_FILE"
@@ -525,7 +551,7 @@ kill_acid_loop() {
         fi
         rm -f "$_PF_ACID"
     fi
-    rm -f "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE" "$_ACID_ACTIVITY_FILE" "$_ACID_NOTES_FILE" "$_ACID_FIFO_PATH_FILE"
+    rm -f "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE" "$_ACID_ACTIVITY_FILE" "$_ACID_NOTES_FILE" "$_ACID_CHORDS_FILE" "$_ACID_FIFO_PATH_FILE"
     # Kill any orphaned tail -f feeding the FIFO
     pkill -f "tail -f /tmp/.cl4ud3-acid-fifo" 2>/dev/null || true
     # Cleanup any orphaned acid temp dirs + FIFOs
@@ -772,6 +798,75 @@ _play_stab_via_fifo() {
     disown $! 2>/dev/null || true
 }
 
+# Play dark pad chord via FIFO — sustained chord on channel 2
+# Reads chord progression from $_ACID_CHORDS_FILE, cycles through
+# Channel 2 (bass=0, stabs=1, pads=2), same fluidsynth + effects chain
+_play_pad_via_fifo() {
+    local fifo="$1"
+    local bpm="$2"
+
+    # Read chord progression
+    [ -f "$_ACID_CHORDS_FILE" ] || return
+    local num_chords
+    num_chords=$(wc -l < "$_ACID_CHORDS_FILE" 2>/dev/null | tr -d ' ')
+    [ "$num_chords" -gt 0 ] 2>/dev/null || return
+
+    # Cycle through chords using a counter file
+    local counter_file="/tmp/.cl4ud3-acid-pad-counter"
+    local idx=0
+    [ -f "$counter_file" ] && idx=$(cat "$counter_file" 2>/dev/null || echo 0)
+    idx=$((idx % num_chords))
+    echo $(( (idx + 1) % num_chords )) > "$counter_file"
+
+    # Read chord at index (1-based for sed)
+    local chord_line
+    chord_line=$(sed -n "$((idx + 1))p" "$_ACID_CHORDS_FILE" 2>/dev/null)
+    [ -n "$chord_line" ] || return
+
+    # Parse notes
+    local chord_notes=($chord_line)
+    [ "${#chord_notes[@]}" -gt 0 ] || return
+
+    # Pick a crisp SQR program for retro pad character
+    local sqr_progs=(50 55 60 65 70 75 80 85)
+    local prog=${sqr_progs[$((RANDOM % ${#sqr_progs[@]}))]}
+
+    # Sustain duration: 4-8 beats worth of seconds
+    local sustain_beats=$((4 + RANDOM % 5))
+    local sustain_secs
+    sustain_secs=$(awk "BEGIN { printf \"%.1f\", $sustain_beats * 60.0 / $bpm }" 2>/dev/null)
+    [ -n "$sustain_secs" ] || sustain_secs=4
+
+    # Fire pad in background — sustained chord
+    (
+        # Set up channel 2: program + warm filter settings
+        echo "prog 2 $prog" > "$fifo"
+        echo "cc 2 71 90" > "$fifo"    # resonance — warm not screaming
+        echo "cc 2 74 70" > "$fifo"    # filter — open but not bright
+        echo "cc 2 11 85" > "$fifo"    # expression — slightly back for pad layer
+
+        # Note on — all chord notes
+        for n in "${chord_notes[@]}"; do
+            echo "noteon 2 $n 75" > "$fifo"
+        done
+
+        # Sustain
+        sleep "$sustain_secs" 2>/dev/null || true
+
+        # Slow filter close during release
+        echo "cc 2 74 50" > "$fifo"
+        sleep 0.3
+        echo "cc 2 74 30" > "$fifo"
+        sleep 0.2
+
+        # Note off — all chord notes
+        for n in "${chord_notes[@]}"; do
+            echo "noteoff 2 $n" > "$fifo"
+        done
+    ) &
+    disown $! 2>/dev/null || true
+}
+
 # Play a random stab — FIFO injection when acid loop running, else MIDI file fallback
 # FIFO mode: raw events on channel 1, same fluidsynth + effects as bassline
 # Fallback: separate fluidsynth instance with 303 soundfont
@@ -833,7 +928,7 @@ kill_all_sounds() {
     killall paplay 2>/dev/null || true
     killall aplay 2>/dev/null || true
     pkill -f "tail -f /tmp/.cl4ud3-acid-fifo" 2>/dev/null || true
-    rm -f /tmp/.cl4ud3-cr4ck-sound-pid-* /tmp/.cl4ud3-cr4ck-music-pid-* /tmp/.cl4ud3-cr4ck-timer-pid-* /tmp/.cl4ud3-cr4ck-loading-pid-* /tmp/.cl4ud3-cr4ck-acid-pid /tmp/.cl4ud3-cr4ck-acid-beat /tmp/.cl4ud3-cr4ck-acid-dir /tmp/.cl4ud3-acid-notes /tmp/.cl4ud3-acid-fifo-path
+    rm -f /tmp/.cl4ud3-cr4ck-sound-pid-* /tmp/.cl4ud3-cr4ck-music-pid-* /tmp/.cl4ud3-cr4ck-timer-pid-* /tmp/.cl4ud3-cr4ck-loading-pid-* /tmp/.cl4ud3-cr4ck-acid-pid /tmp/.cl4ud3-cr4ck-acid-beat /tmp/.cl4ud3-cr4ck-acid-dir /tmp/.cl4ud3-acid-notes /tmp/.cl4ud3-acid-chords /tmp/.cl4ud3-acid-fifo-path
     rm -rf /tmp/.cl4ud3-acid-* /tmp/.cl4ud3-cr4ck-acid-stabs-* 2>/dev/null || true
     return 0
 }
