@@ -1,13 +1,4 @@
-```
-  ╔═══════════════════════════════════════════════════════════════╗
-  ║                                                               ║
-  ║                      c  l  4   u  d 3                         ║
-  ║                   ─── c  r  4  c  k ───                       ║
-  ║                                                               ║
-  ║        warez-inspired sound & art pack for Claude Code        ║
-  ║                  est. 2026 · a gr0g joint                     ║
-  ╚═══════════════════════════════════════════════════════════════╝
-```
+<img width="378" height="218" alt="Screenshot 2026-04-23 at 19 09 13" src="https://github.com/user-attachments/assets/8b76724f-2c1f-4090-835f-12eaee90e7e5" />
 
 ## wH4t 1z th1s
 
@@ -27,8 +18,6 @@
 - ⏱ **Auto-kill timer** — intro music stops after configurable max play time (default 60s)
 
 All sounds generated programmatically — MIDI via `midiutil`, raw WAV via Python stdlib. No sample packs, no downloads, pure math.
-
-<img width="378" height="218" alt="Screenshot 2026-04-23 at 19 09 13" src="https://github.com/user-attachments/assets/8b76724f-2c1f-4090-835f-12eaee90e7e5" />
 
 
 ## 1nst4ll
