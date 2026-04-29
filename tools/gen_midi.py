@@ -931,6 +931,159 @@ def generate_demoscene_2():
     print(f"  [+] {out}")
 
 
+def generate_dark_jungle_gunshot():
+    """Dark jungle — DJ Gunshot 'Black Magic' vibes. ~25 seconds.
+    Dubbed out echoing hoovers over dread bass. Tempo builds:
+    1/4 tempo → 1/2 tempo → full 168 BPM dark jungle.
+    D minor — menacing detuned hoover saws with tape-delay echoes.
+    """
+    midi = MIDIFile(3, deinterleave=False)
+    full_bpm = 168
+
+    # Tempo ramp: quarter → half → full
+    midi.addTempo(0, 0, full_bpm // 4)       # 42 BPM — dread intro
+    midi.addTempo(0, 4.0, full_bpm // 2)     # 84 BPM — half speed
+    midi.addTempo(0, 10.0, full_bpm)          # 168 BPM — full jungle
+
+    midi.addProgramChange(0, 0, 0, 81)   # Saw wave — hoover
+    midi.addProgramChange(1, 1, 0, 80)   # Square — sub bass
+    midi.addProgramChange(2, 9, 0, 0)    # Drums (ch 10)
+
+    def hoover_echo(beat, notes, vel=100, echo_delay=0.5, echoes=3):
+        """Play hoover chord + dub echo repeats at decreasing volume."""
+        for e in range(echoes + 1):
+            t = beat + e * echo_delay
+            v = max(30, vel - e * 22)
+            dur = 0.25 + e * 0.08  # echoes ring slightly longer
+            for n in notes:
+                # Detuned double-track = hoover
+                midi.addNote(0, 0, n, t, dur, v)
+                midi.addNote(0, 0, n - 12, t, dur, max(25, v - 18))
+
+    # ===== PHASE 1: Quarter tempo — 42 BPM, beats 0-4 (~5.7s) =====
+    # Sparse menacing hoover stabs, long dub echoes, sub drone
+    hoover_echo(0.0, [50, 53, 57], vel=100, echo_delay=0.75, echoes=3)   # Dm
+    hoover_echo(2.5, [46, 50, 53], vel=85, echo_delay=0.6, echoes=3)     # Bbmaj
+
+    # Deep sub drone
+    midi.addNote(1, 1, 26, 0.0, 4.0, 100)   # D1 drone
+
+    # ===== PHASE 2: Half tempo — 84 BPM, beats 4-10 (~4.3s) =====
+    # Hoovers start moving, tighter echoes, bass rolls in
+    hoover_echo(4.0, [50, 53, 57], vel=100, echo_delay=0.4, echoes=2)    # Dm
+    hoover_echo(5.5, [55, 58, 62], vel=95, echo_delay=0.4, echoes=2)     # Gm
+    hoover_echo(7.0, [48, 52, 55], vel=100, echo_delay=0.35, echoes=2)   # C
+    hoover_echo(8.5, [46, 50, 53], vel=90, echo_delay=0.35, echoes=2)    # Bb
+
+    # Sub bass starts rolling
+    for note, bt, dur in [
+        (26, 4.0, 0.75), (26, 5.0, 0.4), (31, 5.5, 0.4),
+        (26, 6.5, 0.4), (33, 7.0, 0.75), (26, 8.0, 0.4),
+        (31, 8.5, 0.4), (26, 9.0, 0.4), (34, 9.5, 0.4),
+    ]:
+        midi.addNote(1, 1, note, bt, dur, 105)
+
+    # Sparse hats enter
+    for b in [4.0, 5.0, 6.0, 7.0, 8.0, 9.0]:
+        midi.addNote(2, 9, 42, b, 0.1, 50)
+
+    # ===== PHASE 3: Full tempo — 168 BPM, beats 10-52 (~15s) =====
+    # Full dark jungle: rapid hoovers, rolling bass, breakbeat
+
+    # Hoover stab patterns — D minor, menacing voicings
+    hoover_pats = [
+        # A — descending menace
+        [(0.0, [50, 53, 57]), (0.75, [48, 53, 57]), (1.5, [46, 50, 53]),
+         (2.25, [43, 46, 50]), (3.0, [46, 50, 53])],
+        # B — rising dread
+        [(0.0, [43, 46, 50]), (0.75, [46, 50, 53]), (1.5, [48, 53, 57]),
+         (2.25, [50, 53, 57]), (3.0, [53, 57, 62])],
+        # C — stabby
+        [(0.0, [50, 53, 57]), (0.5, [53, 57, 62]), (1.0, [48, 53, 57]),
+         (1.75, [46, 50, 53]), (2.5, [50, 53, 57]), (3.25, [43, 46, 50])],
+        # D — dub space (sparse for echo room)
+        [(0.0, [53, 57, 62]), (1.5, [48, 53, 57]), (3.0, [50, 53, 57])],
+        # E — rapid fire descending
+        [(0.0, [57, 62, 65]), (0.5, [53, 57, 62]), (1.0, [50, 53, 57]),
+         (1.5, [48, 53, 57]), (2.0, [46, 50, 53]), (2.5, [43, 46, 50]),
+         (3.0, [46, 50, 53])],
+        # F — tritone dread
+        [(0.0, [50, 53, 57]), (1.0, [44, 50, 56]), (2.0, [46, 50, 53]),
+         (3.0, [43, 46, 50])],
+    ]
+
+    # Bass — deep rolling D minor sub
+    bass_pats = [
+        [(26, 0.0, 0.4), (26, 0.5, 0.2), (31, 0.75, 0.4),
+         (26, 1.5, 0.4), (34, 2.0, 0.2), (31, 2.5, 0.4),
+         (26, 3.0, 0.4), (29, 3.5, 0.2)],
+        [(26, 0.0, 0.4), (29, 0.5, 0.4), (26, 1.0, 0.2),
+         (31, 1.5, 0.4), (34, 2.0, 0.4), (26, 2.5, 0.2),
+         (31, 3.0, 0.4), (26, 3.5, 0.4)],
+        [(34, 0.0, 0.2), (31, 0.25, 0.2), (26, 0.5, 0.4),
+         (29, 1.0, 0.4), (26, 1.5, 0.2), (34, 2.0, 0.4),
+         (31, 2.5, 0.2), (26, 3.0, 0.4), (26, 3.5, 0.2)],
+        [(26, 0.0, 0.4), (26, 0.75, 0.2), (31, 1.0, 0.4),
+         (33, 1.5, 0.2), (26, 2.0, 0.4), (29, 2.5, 0.4),
+         (26, 3.0, 0.2), (34, 3.5, 0.4)],
+    ]
+
+    # Jungle breaks — amen-style chopped
+    break_pats = [
+        # Classic jungle break
+        [(36, 0.0, 90), (42, 0.25, 55), (38, 0.5, 80), (42, 0.75, 55),
+         (36, 1.0, 90), (42, 1.25, 55), (42, 1.5, 50), (38, 1.75, 80),
+         (36, 2.0, 90), (42, 2.25, 55), (38, 2.5, 80), (42, 2.75, 55),
+         (36, 3.0, 85), (38, 3.25, 75), (42, 3.5, 55), (42, 3.75, 50)],
+        # Chopped break
+        [(36, 0.0, 90), (42, 0.5, 55), (38, 0.75, 80), (42, 1.0, 55),
+         (36, 1.25, 85), (42, 1.75, 50), (38, 2.0, 80), (42, 2.25, 55),
+         (36, 2.5, 90), (42, 2.75, 55), (38, 3.0, 80), (36, 3.25, 85),
+         (42, 3.5, 50)],
+        # Sparse dread break — leave space for echoes
+        [(36, 0.0, 95), (42, 0.75, 50), (38, 1.5, 85), (42, 2.0, 55),
+         (36, 2.5, 90), (42, 3.0, 50), (38, 3.5, 80)],
+        # Double-time chopped amen
+        [(36, 0.0, 90), (42, 0.25, 55), (42, 0.5, 50), (38, 0.75, 80),
+         (42, 1.0, 55), (36, 1.25, 85), (42, 1.5, 55), (38, 1.75, 80),
+         (36, 2.0, 90), (42, 2.25, 55), (38, 2.5, 80), (42, 2.75, 55),
+         (36, 3.0, 90), (42, 3.25, 55), (38, 3.5, 80), (42, 3.75, 50)],
+    ]
+
+    t = 10.0
+    end_beat = 52.0
+    cycle = 0
+
+    while t < end_beat:
+        # Hoover stabs with dub echo
+        hp = hoover_pats[cycle % len(hoover_pats)]
+        for st, notes in hp:
+            if t + st < end_beat:
+                hoover_echo(t + st, notes, vel=100, echo_delay=0.25,
+                            echoes=2)
+
+        # Rolling bass
+        bass = bass_pats[cycle % len(bass_pats)]
+        for note, bt, dur in bass:
+            if t + bt < end_beat:
+                midi.addNote(1, 1, note, t + bt, dur, 110)
+
+        # Jungle breaks
+        brk = break_pats[cycle % len(break_pats)]
+        for note, bt, vel in brk:
+            if t + bt < end_beat:
+                midi.addNote(2, 9, note, t + bt, 0.1, vel)
+
+        t += 4.0
+        cycle += 1
+
+    out = os.path.join(SOUNDS_DIR, "startup", "jingle-12-darkjungle.mid")
+    _ensure_dir(os.path.dirname(out))
+    with open(out, "wb") as f:
+        midi.writeFile(f)
+    print(f"  [+] {out}")
+
+
 def generate_warez_keygen():
     """Keygen Classic — Stabby square wave in Am. ~6s at 140 BPM.
     Just stabs + bass. Two parts. Every keygen.exe ever.
@@ -1395,6 +1548,7 @@ def main():
     generate_detroit_techno()
     generate_demoscene_1()
     generate_demoscene_2()
+    generate_dark_jungle_gunshot()
 
     print("  [*] Generating glitch notifications...")
     generate_glitch_sounds()
