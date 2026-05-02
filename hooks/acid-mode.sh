@@ -462,7 +462,7 @@ _strobe_start_loop() {
                 sleep "${blackout:-0.8}" 2>/dev/null
             fi
         done
-    ) &
+    ) </dev/null >/dev/null 2>&1 &
     local loop_pid=$!
     echo "$loop_pid" > "$_PF_STROBE"
     disown "$loop_pid" 2>/dev/null

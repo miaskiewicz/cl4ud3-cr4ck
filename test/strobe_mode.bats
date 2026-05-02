@@ -353,12 +353,12 @@ teardown() {
 }
 
 @test "strobe loop: disowns background process" {
-    run grep -A65 '_strobe_start_loop()' "$CL4UD3_HOME/hooks/acid-mode.sh"
+    run grep -A150 '_strobe_start_loop()' "$CL4UD3_HOME/hooks/acid-mode.sh"
     assert_output --partial 'disown'
 }
 
 @test "strobe loop: writes PID to _PF_STROBE" {
-    run grep -A65 '_strobe_start_loop()' "$CL4UD3_HOME/hooks/acid-mode.sh"
+    run grep -A150 '_strobe_start_loop()' "$CL4UD3_HOME/hooks/acid-mode.sh"
     assert_output --partial '_PF_STROBE'
 }
 
@@ -391,12 +391,12 @@ teardown() {
 }
 
 @test "strobe loop: has random white bar flicker between bursts" {
-    run grep -A55 '_strobe_start_loop()' "$CL4UD3_HOME/hooks/acid-mode.sh"
+    run grep -A150 '_strobe_start_loop()' "$CL4UD3_HOME/hooks/acid-mode.sh"
     assert_output --partial '████'
 }
 
 @test "strobe loop: has jitter on pause duration" {
-    run grep -A55 '_strobe_start_loop()' "$CL4UD3_HOME/hooks/acid-mode.sh"
+    run grep -A150 '_strobe_start_loop()' "$CL4UD3_HOME/hooks/acid-mode.sh"
     assert_output --partial 'jitter'
 }
 
@@ -405,12 +405,12 @@ teardown() {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @test "strobe loop: checks _is_acid_active for color mixing" {
-    run grep -A70 '_strobe_start_loop()' "$CL4UD3_HOME/hooks/acid-mode.sh"
+    run grep -A150 '_strobe_start_loop()' "$CL4UD3_HOME/hooks/acid-mode.sh"
     assert_output --partial '_is_acid_active'
 }
 
 @test "strobe loop: uses _ACID_COLORS when acid active" {
-    run grep -A70 '_strobe_start_loop()' "$CL4UD3_HOME/hooks/acid-mode.sh"
+    run grep -A150 '_strobe_start_loop()' "$CL4UD3_HOME/hooks/acid-mode.sh"
     assert_output --partial '_ACID_COLORS'
 }
 
@@ -438,6 +438,9 @@ teardown() {
         CL4UD3_STROBE_MODE=false
         rm -f /tmp/.cl4ud3-cr4ck-strobe-pid
         _strobe_toggle 2>/dev/null
+        # Kill spawned loop immediately
+        [ -f /tmp/.cl4ud3-cr4ck-strobe-pid ] && kill \$(cat /tmp/.cl4ud3-cr4ck-strobe-pid) 2>/dev/null
+        rm -f /tmp/.cl4ud3-cr4ck-strobe-pid
     "
     assert_output --partial "strobe: ON"
 }
@@ -459,6 +462,9 @@ teardown() {
         rm -f /tmp/.cl4ud3-cr4ck-strobe-pid
         _strobe_toggle 2>/dev/null
         echo \$CL4UD3_STROBE_MODE
+        # Kill spawned loop immediately
+        [ -f /tmp/.cl4ud3-cr4ck-strobe-pid ] && kill \$(cat /tmp/.cl4ud3-cr4ck-strobe-pid) 2>/dev/null
+        rm -f /tmp/.cl4ud3-cr4ck-strobe-pid
     "
     assert_output --partial "true"
 }

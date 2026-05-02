@@ -286,7 +286,7 @@ play_loop_from_dir() {
 
             sleep 0.5  # Brief gap between tracks
         done
-    ) &
+    ) </dev/null >/dev/null 2>&1 &
     local loop_pid=$!
     if [ -n "$loop_pid" ]; then
         echo "$loop_pid" > "$_PF_MUSIC"
@@ -558,7 +558,7 @@ play_acid_loop() {
         [ -n "$cur_dir" ] && rm -rf "$cur_dir"
         [ -n "$next_dir" ] && rm -rf "$next_dir"
         rm -f "$my_pidfile" "$_ACID_BEAT_FILE" "$_ACID_DIR_FILE" "$_ACID_ACTIVITY_FILE"
-    ) &
+    ) </dev/null >/dev/null 2>&1 &
     local loop_pid=$!
     if [ -n "$loop_pid" ]; then
         echo "$loop_pid" > "$_PF_ACID"
@@ -820,7 +820,7 @@ _play_stab_via_fifo() {
                 done
                 ;;
         esac
-    ) &
+    ) </dev/null >/dev/null 2>&1 &
     disown $! 2>/dev/null || true
 }
 
@@ -900,7 +900,7 @@ _play_pad_via_fifo() {
         for n in "${chord_notes[@]}"; do
             echo "noteoff 2 $n" > "$fifo"
         done
-    ) &
+    ) </dev/null >/dev/null 2>&1 &
     disown $! 2>/dev/null || true
 }
 
@@ -942,7 +942,7 @@ play_acid_stab_synced() {
     (
         sleep "$wait_time" 2>/dev/null || true
         [ -f "$stab" ] && _play_midi_blocking "$stab" "${_ACID_303_SF:-}"
-    ) &
+    ) </dev/null >/dev/null 2>&1 &
     disown $! 2>/dev/null || true
 }
 
