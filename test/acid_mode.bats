@@ -1926,7 +1926,7 @@ print('ok')
 @test "config.sh: _ACID_PADS_ENABLED config exists" {
     run grep '_ACID_PADS_ENABLED' "$CL4UD3_HOME/config.sh"
     assert_success
-    assert_output --partial ":-true"
+    assert_output --partial ":-false"
 }
 
 @test "acid-mode.sh: _ACID_PADS_ENABLED defaults to false" {

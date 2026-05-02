@@ -336,45 +336,130 @@ _strobe_start_loop() {
         trap '' HUP
         trap '_strobe_cleanup_on_exit' EXIT
 
+        local bar="████████████████████████████████████████████████████████████████████████████████"
+
         while [ -f "$my_pidfile" ]; do
-            # Strobe burst
-            local speed="${_STROBE_SPEED:-0.08}"
-            local frames="${_STROBE_BURST_LEN:-6}"
-            local pause="${_STROBE_PAUSE:-0.4}"
+            local base_speed="${_STROBE_SPEED:-0.08}"
+            local base_frames="${_STROBE_BURST_LEN:-6}"
+            local base_pause="${_STROBE_PAUSE:-0.4}"
 
-            for ((f=0; f<frames; f++)); do
-                [ -f "$my_pidfile" ] || break
-                # FLASH — reverse video (inverts ALL screen content)
-                printf '\033[?5h' > /dev/tty 2>/dev/null
-                sleep "$speed" 2>/dev/null
-                # NORMAL
-                printf '\033[?5l' > /dev/tty 2>/dev/null
-                sleep "$speed" 2>/dev/null
-            done
+            # ── BPM sync when acid active ──
+            local beat_speed="$base_speed"
+            if _is_acid_active 2>/dev/null && [ -f "$_ACID_BEAT_FILE" ]; then
+                local beat_bpm
+                beat_bpm=$(tail -1 "$_ACID_BEAT_FILE" 2>/dev/null | tr -d ' ')
+                if [ -n "$beat_bpm" ] && [ "$beat_bpm" -gt 0 ] 2>/dev/null; then
+                    # Sync flash to 8th notes: 60 / bpm / 2
+                    beat_speed=$(awk "BEGIN { printf \"%.3f\", 60.0 / $beat_bpm / 2 }" 2>/dev/null)
+                    [ -n "$beat_speed" ] || beat_speed="$base_speed"
+                fi
+            fi
 
-            # Random white bar flicker between bursts (30% chance)
-            if [ $((RANDOM % 10)) -lt 3 ]; then
-                local bar="████████████████████████████████████████████████████████████████████████████████"
+            # ── Randomize burst length (2-10 frames, biased toward base) ──
+            local frames=$(( base_frames + (RANDOM % 5) - 2 ))
+            [ "$frames" -lt 2 ] && frames=2
+            [ "$frames" -gt 10 ] && frames=10
+
+            # ── Pick random pattern for this burst ──
+            local pattern=$(( RANDOM % 6 ))
+            case $pattern in
+                0)  # Regular strobe
+                    for ((f=0; f<frames; f++)); do
+                        [ -f "$my_pidfile" ] || break
+                        printf '\033[?5h' > /dev/tty 2>/dev/null
+                        sleep "$beat_speed" 2>/dev/null
+                        printf '\033[?5l' > /dev/tty 2>/dev/null
+                        sleep "$beat_speed" 2>/dev/null
+                    done
+                    ;;
+                1)  # Stutter — rapid double-flash then gap
+                    for ((f=0; f<frames; f++)); do
+                        [ -f "$my_pidfile" ] || break
+                        printf '\033[?5h' > /dev/tty 2>/dev/null
+                        sleep 0.03
+                        printf '\033[?5l' > /dev/tty 2>/dev/null
+                        sleep 0.02
+                        printf '\033[?5h' > /dev/tty 2>/dev/null
+                        sleep 0.03
+                        printf '\033[?5l' > /dev/tty 2>/dev/null
+                        sleep "$beat_speed" 2>/dev/null
+                    done
+                    ;;
+                2)  # White bar flicker only
+                    local flicks=$(( 2 + RANDOM % 4 ))
+                    for ((f=0; f<flicks; f++)); do
+                        [ -f "$my_pidfile" ] || break
+                        printf '\033[97;107m%s\033[0m' "$bar" > /dev/tty 2>/dev/null
+                        sleep 0.03
+                        printf '\r\033[K' > /dev/tty 2>/dev/null
+                        local gap=$(awk "BEGIN { srand(); printf \"%.2f\", 0.03 + rand() * 0.12 }" 2>/dev/null)
+                        sleep "${gap:-0.06}" 2>/dev/null
+                    done
+                    ;;
+                3)  # Long flash hold — creepy slow pulse
+                    local hold
+                    hold=$(awk "BEGIN { srand(); printf \"%.2f\", 0.15 + rand() * 0.35 }" 2>/dev/null)
+                    printf '\033[?5h' > /dev/tty 2>/dev/null
+                    sleep "${hold:-0.25}" 2>/dev/null
+                    printf '\033[?5l' > /dev/tty 2>/dev/null
+                    ;;
+                4)  # Accelerating — starts slow, speeds up
+                    for ((f=0; f<frames; f++)); do
+                        [ -f "$my_pidfile" ] || break
+                        local accel
+                        accel=$(awk "BEGIN { printf \"%.3f\", $beat_speed * (1.0 - $f / ($frames * 1.5)) }" 2>/dev/null)
+                        [ -n "$accel" ] || accel="$beat_speed"
+                        printf '\033[?5h' > /dev/tty 2>/dev/null
+                        sleep "$accel" 2>/dev/null
+                        printf '\033[?5l' > /dev/tty 2>/dev/null
+                        sleep "$accel" 2>/dev/null
+                    done
+                    ;;
+                5)  # Chaos — random timing each flash
+                    for ((f=0; f<frames; f++)); do
+                        [ -f "$my_pidfile" ] || break
+                        local on_t off_t
+                        on_t=$(awk "BEGIN { srand(); printf \"%.3f\", 0.02 + rand() * 0.15 }" 2>/dev/null)
+                        off_t=$(awk "BEGIN { srand(); printf \"%.3f\", 0.02 + rand() * 0.20 }" 2>/dev/null)
+                        printf '\033[?5h' > /dev/tty 2>/dev/null
+                        sleep "${on_t:-0.05}" 2>/dev/null
+                        printf '\033[?5l' > /dev/tty 2>/dev/null
+                        sleep "${off_t:-0.08}" 2>/dev/null
+                    done
+                    ;;
+            esac
+
+            # ── Random white bar flicker between bursts (40% chance) ──
+            if [ $((RANDOM % 10)) -lt 4 ]; then
                 printf '\033[97;107m%s\033[0m' "$bar" > /dev/tty 2>/dev/null
                 sleep 0.04
                 printf '\r\033[K' > /dev/tty 2>/dev/null
             fi
 
-            # Pause between bursts — randomize slightly
+            # ── Pause between bursts — heavily randomized ──
             local jitter
-            jitter=$(awk "BEGIN { srand(); printf \"%.2f\", $pause * (0.5 + rand()) }" 2>/dev/null)
-            [ -n "$jitter" ] || jitter="$pause"
+            jitter=$(awk "BEGIN { srand(); printf \"%.2f\", $base_pause * (0.2 + rand() * 1.5) }" 2>/dev/null)
+            [ -n "$jitter" ] || jitter="$base_pause"
             sleep "$jitter" 2>/dev/null
 
-            # If acid mode also on, occasionally throw acid colors into the strobe
+            # ── Acid color flash (35% chance when acid on) ──
             if _is_acid_active 2>/dev/null; then
-                if [ $((RANDOM % 4)) -eq 0 ]; then
+                if [ $((RANDOM % 20)) -lt 7 ]; then
                     local ci=$(( RANDOM % ${#_ACID_COLORS[@]} ))
                     printf '\033[38;5;%dm' "${_ACID_COLORS[$ci]}" > /dev/tty 2>/dev/null
                     printf '\033[?5h' > /dev/tty 2>/dev/null
-                    sleep 0.06
+                    local color_hold
+                    color_hold=$(awk "BEGIN { srand(); printf \"%.2f\", 0.03 + rand() * 0.10 }" 2>/dev/null)
+                    sleep "${color_hold:-0.06}" 2>/dev/null
                     printf '\033[?5l\033[0m' > /dev/tty 2>/dev/null
                 fi
+            fi
+
+            # ── Occasional blackout gap (15% chance) — silence before storm ──
+            if [ $((RANDOM % 20)) -lt 3 ]; then
+                local blackout
+                blackout=$(awk "BEGIN { srand(); printf \"%.2f\", 0.5 + rand() * 1.5 }" 2>/dev/null)
+                sleep "${blackout:-0.8}" 2>/dev/null
             fi
         done
     ) &
@@ -387,7 +472,6 @@ _strobe_cleanup_on_exit() {
     printf '\033[?5l\033[0m' > /dev/tty 2>/dev/null
 }
 
-# Kill strobe loop
 # Kill this tab's strobe loop
 _strobe_kill() {
     if [ -f "$_PF_STROBE" ]; then

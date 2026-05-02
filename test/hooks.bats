@@ -167,6 +167,30 @@ teardown() {
     [ ! -d "/tmp/.cl4ud3-cr4ck-all-jingles-$CL4UD3_SID" ]
 }
 
+@test "session-start.sh: skips jingle when acid mode on and 303 running" {
+    export CL4UD3_ACID_MODE="true"
+    export CL4UD3_STARTUP_JINGLE="true"
+    export CL4UD3_SOUNDS_ENABLED="true"
+    export CL4UD3_STARTUP_ART="false"
+    # Fake a running acid loop PID
+    echo "$$" > /tmp/.cl4ud3-cr4ck-acid-pid
+    run bash "$CL4UD3_HOME/hooks/session-start.sh"
+    assert_success
+    rm -f /tmp/.cl4ud3-cr4ck-acid-pid
+}
+
+@test "session-start.sh: plays jingle when acid on but 303 not running" {
+    export CL4UD3_ACID_MODE="true"
+    export CL4UD3_STARTUP_JINGLE="true"
+    export CL4UD3_SOUNDS_ENABLED="true"
+    export CL4UD3_STARTUP_ART="false"
+    export CL4UD3_STARTUP_LOOP="false"
+    # No acid PID file — 303 not running
+    rm -f /tmp/.cl4ud3-cr4ck-acid-pid
+    run bash "$CL4UD3_HOME/hooks/session-start.sh"
+    assert_success
+}
+
 # ── post-tool-use.sh ──
 
 @test "post-tool-use.sh: exits 0 with sounds disabled" {

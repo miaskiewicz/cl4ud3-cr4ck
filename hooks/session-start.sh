@@ -36,7 +36,21 @@ if [ "$JINGLE_DIR" = "all" ]; then
 else
     JINGLE_PATH="$CL4UD3_HOME/sounds/$JINGLE_DIR"
 fi
-if [ "$CL4UD3_STARTUP_JINGLE" != "false" ] && [ "$CL4UD3_SOUNDS_ENABLED" != "false" ]; then
+# Skip intro jingle if acid mode on + 303 loop already playing
+_acid_303_running=false
+if [ "$CL4UD3_ACID_MODE" = "true" ]; then
+    _PF_ACID="/tmp/.cl4ud3-cr4ck-acid-pid"
+    if [ -f "$_PF_ACID" ]; then
+        _acid_pid=$(cat "$_PF_ACID" 2>/dev/null)
+        if [ -n "$_acid_pid" ] && kill -0 "$_acid_pid" 2>/dev/null; then
+            _acid_303_running=true
+        fi
+    fi
+fi
+
+if [ "$_acid_303_running" = "true" ]; then
+    : # Acid 303 playing — skip intro jingle
+elif [ "$CL4UD3_STARTUP_JINGLE" != "false" ] && [ "$CL4UD3_SOUNDS_ENABLED" != "false" ]; then
     if [ "$CL4UD3_STARTUP_LOOP" = "false" ]; then
         play_random_from_dir "$JINGLE_PATH"
     else
